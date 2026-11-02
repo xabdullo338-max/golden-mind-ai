@@ -114,8 +114,15 @@ async def market_data(symbol: str):
             "trading_enabled": False
         }
 
-    except httpx.HTTPError:
+    except httpx.HTTPStatusError as exc:
+        print(f"BINANCE HTTP ERROR: {exc.response.status_code} - {exc.response.text[:500]}")
         raise HTTPException(
             status_code=502,
-            detail="Binance market data unavailable"
+            detail="Binance HTTP error. Check Render logs."
+        )
+    except httpx.RequestError as exc:
+        print(f"BINANCE CONNECTION ERROR: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail="Binance connection error. Check Render logs."
         )
