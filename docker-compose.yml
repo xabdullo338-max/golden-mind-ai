@@ -1,0 +1,7 @@
+services:
+  golden-mind-ai:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      TRADING_MODE: PAPER
