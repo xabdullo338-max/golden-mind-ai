@@ -1,22 +1,29 @@
 # GOLDEN MIND AI
 
-A safety-first Binance Spot market scanner and paper-trading foundation.
+Safety-first algorithmic trading foundation.
 
-## Current mode
+## Current status
 
-**PAPER ONLY. Live Binance orders are disabled.**
+**PAPER ONLY. Live orders are disabled.** This repository is intentionally built so that a broker integration cannot silently place real orders.
 
-The first version uses:
-- EMA 20 / EMA 50
-- RSI 14
-- BUY / SELL / HOLD signal
-- Stop-loss / take-profit levels
-- Position sizing
-- Risk validation
-- Binance public market data
+### Architecture
+- FastAPI API
+- Market-data adapter
+- Signal/strategy layer
+- Risk engine with per-trade and daily-loss limits
+- Paper broker
+- Backtesting foundation
+- Automated tests
+- Configuration through environment variables
 
-## Run locally
+### Risk defaults
+- Initial paper balance: $300
+- Max risk per trade: 1%
+- Max daily loss: 3%
+- Max open positions: 3
+- Live trading: disabled
 
+### Local run
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -24,42 +31,16 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-On Windows:
-
-```powershell
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+Run tests:
+```bash
+pytest -q
 ```
 
-## API
+## Broker roadmap
+1. Validate strategy with historical backtests.
+2. Run paper trading for a meaningful sample.
+3. Add an IBKR adapter using the official API.
+4. Keep live execution behind an explicit kill switch.
+5. Start with a small allocation only after validation.
 
-```text
-GET /
-GET /health
-GET /api/v1/market/BTCUSDT
-GET /api/v1/signal/BTCUSDT
-```
-
-Example:
-
-```text
-http://127.0.0.1:8000/api/v1/signal/BTCUSDT
-```
-
-## Security
-
-Do not upload `.env` or real Binance API keys to GitHub.
-
-For future live trading, create a Binance API key with **withdrawals disabled** and use the minimum permissions required. Live trading should only be enabled after backtesting and paper-trading validation.
-
-## Roadmap
-
-1. Market data
-2. Strategy engine
-3. Risk manager
-4. Paper trader
-5. Backtester
-6. Dashboard
-7. Binance Testnet
-8. Live Spot execution (optional, after validation)
+**Never commit API keys, broker credentials, or secrets.**
