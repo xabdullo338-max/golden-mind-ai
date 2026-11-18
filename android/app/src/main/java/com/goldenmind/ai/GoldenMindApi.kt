@@ -13,18 +13,16 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import java.security.KeyStore
 
-data class ApiHealth(
-    val status: String,
-    val tradingMode: String,
-    val accounts: Int
-)
-
-data class AccountInfo(
+data class ApiHealth(val status: String, val tradingMode: String, val accounts: Int)
+data class AccountInfo(val accountId: String, val broker: String, val mode: String, val enabled: Boolean)
+data class AccountState(
     val accountId: String,
     val broker: String,
-    val mode: String,
-    val enabled: Boolean
+    val balances: Map<String, Double>,
+    val positions: Map<String, Double>,
+    val confirmed: Boolean
 )
+data class OrderResult(val status: String, val symbol: String, val side: String, val quantity: Double, val price: Double?)
 
 class SecureTokenStore(context: Context) {
     private val prefs = context.getSharedPreferences("gmai_secure", Context.MODE_PRIVATE)
@@ -62,7 +60,7 @@ class SecureTokenStore(context: Context) {
 
 class GoldenMindApi(
     private val context: Context,
-    private val baseUrl: String = "http://10.0.2.2:8000"
+    private val baseUrl: String = BuildConfig.API_BASE_URL
 ) {
     private val tokenStore = SecureTokenStore(context)
 
@@ -81,17 +79,14 @@ class GoldenMindApi(
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+        connection.disconnect()
         if (code !in 200..299) error("HTTP $code: $text")
         return text
     }
 
     fun health(): ApiHealth {
         val json = JSONObject(request("/health"))
-        return ApiHealth(
-            status = json.optString("status"),
-            tradingMode = json.optString("trading_mode"),
-            accounts = json.optInt("accounts")
-        )
+        return ApiHealth(json.optString("status"), json.optString("trading_mode"), json.optInt("accounts"))
     }
 
     fun login(username: String, password: String): Boolean {
@@ -105,6 +100,7 @@ class GoldenMindApi(
         return true
     }
 
+    fun hasSession(): Boolean = tokenStore.read() != null
     fun logout() = tokenStore.clear()
 
     fun accounts(): List<AccountInfo> {
@@ -112,13 +108,36 @@ class GoldenMindApi(
         return buildList {
             for (i in 0 until arr.length()) {
                 val item = arr.getJSONObject(i)
-                add(AccountInfo(
-                    accountId = item.optString("account_id"),
-                    broker = item.optString("broker"),
-                    mode = item.optString("mode"),
-                    enabled = item.optBoolean("enabled")
-                ))
+                add(AccountInfo(item.optString("account_id"), item.optString("broker"), item.optString("mode"), item.optBoolean("enabled")))
             }
         }
+    }
+
+    fun state(accountId: String): AccountState {
+        val id = URLEncoder.encode(accountId, "UTF-8")
+        val json = JSONObject(request("/accounts/${id}/state"))
+        fun map(name: String): Map<String, Double> {
+            val obj = json.optJSONObject(name) ?: return emptyMap()
+            return obj.keys().asSequence().associateWith { obj.optDouble(it, 0.0) }
+        }
+        return AccountState(json.optString("account_id"), json.optString("broker"), map("balances"), map("positions"), json.optBoolean("confirmed"))
+    }
+
+    fun placeMarketOrder(accountId: String, clientOrderId: String, symbol: String, side: String, quantity: Double, price: Double? = null): OrderResult {
+        val id = URLEncoder.encode(accountId, "UTF-8")
+        val body = JSONObject().apply {
+            put("client_order_id", clientOrderId)
+            put("symbol", symbol)
+            put("side", side.uppercase())
+            put("quantity", quantity)
+            put("order_type", "MARKET")
+            if (price != null) put("price", price)
+        }
+        val json = JSONObject(request("/accounts/${id}/orders", "POST", body.toString()))
+        return OrderResult(json.optString("status"), json.optString("symbol"), json.optString("side"), json.optDouble("executedQty", quantity), if (json.has("price")) json.optDouble("price") else null)
+    }
+
+    fun emergencyStop() {
+        request("/kill-switch/stop", "POST", "{}")
     }
 }
