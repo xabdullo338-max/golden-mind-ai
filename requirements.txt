@@ -8,3 +8,5 @@ pytest==8.3.4
 pwdlib[argon2]
 PyJWT
 python-multipart
+
+cryptography
