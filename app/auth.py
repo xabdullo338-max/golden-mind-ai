@@ -9,28 +9,46 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 
+from .users import UserStore
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
-ALGORITHM = "HS256"
 
 def _secret() -> str:
-    secret = os.getenv("GMAI_JWT_SECRET")
-    if not secret:
+    value = os.getenv("GMAI_JWT_SECRET")
+    if not value:
         raise RuntimeError("GMAI_JWT_SECRET is not configured")
-    return secret
+    return value
 
 def create_access_token(subject: str, scopes: list[str], minutes: int = 30) -> str:
     now = datetime.now(UTC)
-    payload = {"sub": subject, "scopes": scopes, "iat": now, "exp": now + timedelta(minutes=minutes)}
-    return jwt.encode(payload, _secret(), algorithm=ALGORITHM)
+    return jwt.encode(
+        {"sub": subject, "scopes": scopes, "iat": now, "exp": now + timedelta(minutes=minutes)},
+        _secret(), algorithm="HS256"
+    )
 
-def require_token(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
-    exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid or expired token",
-                        headers={"WWW-Authenticate": "Bearer"})
+def role_scopes(role: str) -> list[str]:
+    return {
+        "admin": ["read", "trade", "admin"],
+        "trader": ["read", "trade"],
+        "viewer": ["read"],
+    }.get(role, [])
+
+def current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
+    exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     try:
-        payload = jwt.decode(token, _secret(), algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _secret(), algorithms=["HS256"])
     except InvalidTokenError as e:
         raise exc from e
     if not payload.get("sub"):
         raise exc
     return payload
+
+def require_scope(scope: str):
+    def dependency(user: Annotated[dict, Depends(current_user)]) -> dict:
+        if scope not in user.get("scopes", []):
+            raise HTTPException(status_code=403, detail=f"Missing scope: {scope}")
+        return user
+    return dependency
+
+def authenticate(username: str, password: str) -> dict | None:
+    return UserStore().authenticate(username, password)
