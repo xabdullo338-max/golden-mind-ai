@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .account_manager import AccountManager
 from .execution_gate import ExecutionGate
 from .kill_switch import KillSwitch
 from .order_models import OrderRequest, OrderSide, OrderType
-from .portfolio_state import PortfolioStateManager
+from .portfolio_state import PortfolioStateManager\nfrom .auth import create_access_token, require_token
 
 app = FastAPI(title="Golden Mind AI API", version="0.1.0")
 
@@ -26,7 +26,7 @@ class OrderBody(BaseModel):
     limit_price: float | None = Field(default=None, gt=0)
 
 
-@app.get("/health")
+@app.post("/token")\nasync def token():\n    return {"access_token": create_access_token("admin", ["read", "trade", "admin"]), "token_type": "bearer"}\n\n@app.get("/protected/ping")\nasync def protected_ping(_: dict = Depends(require_token)):\n    return {"status": "authenticated"}\n\n@app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": "golden-mind-ai"}
 
