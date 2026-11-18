@@ -28,6 +28,8 @@ def execution_report_to_update(message: dict[str, Any], account_id: str) -> Orde
     if avg_price <= 0:
         avg_price = None
 
+    side = str(message.get("S", "")).upper() or None
+
     return OrderUpdate(
         broker="BINANCE",
         account_id=account_id,
@@ -37,4 +39,5 @@ def execution_report_to_update(message: dict[str, Any], account_id: str) -> Orde
         executed_quantity=cumulative_qty,
         average_price=avg_price,
         broker_order_id=str(message.get("i")) if message.get("i") is not None else None,
+        side=side,
     )
