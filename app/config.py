@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     scalping_cooldown_seconds: float = Field(default=0.5, ge=0, le=60)
     scalping_max_spread_pct: float = Field(default=0.08, gt=0, le=5)
     scalping_min_move_pct: float = Field(default=0.03, gt=0, le=10)
+    max_market_data_age_seconds: float = Field(default=2.0, gt=0, le=60)
 
     @property
     def symbols(self) -> set[str]:
