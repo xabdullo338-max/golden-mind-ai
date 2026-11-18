@@ -16,12 +16,15 @@ class OrderRouter:
 
     async def route(self, account_id: str, order: OrderRequest) -> dict[str, Any]:
         self.kill_switch.assert_allowed(account_id)
-        self.idempotency.check_and_mark(f"{account_id}:{order.client_order_id}")
+        key = f"{account_id}:{order.client_order_id}"
+        decision = self.idempotency.check_and_mark(key)
+        if not decision.allowed:
+            raise RuntimeError(decision.reason)
         try:
             return await self.accounts.order_to(account_id, order)
         except Exception:
             # Do not permanently consume an ID when the broker never accepted it.
-            self.idempotency.forget(f"{account_id}:{order.client_order_id}")
+            self.idempotency.forget(key)
             raise
 
     async def broadcast(self, order: OrderRequest) -> list[dict[str, Any]]:
