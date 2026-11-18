@@ -6,29 +6,20 @@ import os
 import time
 from typing import Any
 from urllib.parse import urlencode
-
 import httpx
-
 from .base import BrokerAdapter, BrokerAccount
 
 class BinanceAPIError(RuntimeError):
     pass
 
 class BinanceAdapter(BrokerAdapter):
-    """Binance Spot adapter.
-
-    PAPER: local simulation with an in-memory cash/position ledger.
-    TESTNET/DEMO: Binance sandbox endpoint.
-    LIVE: real Binance Spot account; requires GMAI_LIVE_TRADING=true.
-    """
+    """Binance Spot adapter: PAPER simulation, TESTNET/DEMO sandbox, LIVE real account."""
 
     def __init__(self, account_id: str, api_key: str = "", api_secret: str = "",
-                 base_url: str = "https://testnet.binance.vision",
-                 mode: str = "PAPER", initial_quote_balance: float = 300.0,
-                 timeout_seconds: float = 10.0):
+                 base_url: str = "https://testnet.binance.vision", mode: str = "PAPER",
+                 initial_quote_balance: float = 300.0, timeout_seconds: float = 10.0):
         self.account = BrokerAccount(account_id, "BINANCE", mode)
-        self.api_key = api_key
-        self.api_secret = api_secret
+        self.api_key, self.api_secret = api_key, api_secret
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self._paper_cash = float(initial_quote_balance)
@@ -51,11 +42,13 @@ class BinanceAdapter(BrokerAdapter):
             raise BinanceAPIError("API key is required for Binance broker mode")
         params = params or {}
         headers = {"X-MBX-APIKEY": self.api_key}
+        url = f"{self.base_url}{path}"
         if signed:
-            url = f"{self.base_url}{path}?{self._signed_query(params)}"
+            url += "?" + self._signed_query(params)
         else:
             query = urlencode({k: v for k, v in params.items() if v is not None})
-            url = f"{self.base_url}{path}" + (f"?{query}" if query else "")
+            if query:
+                url += "?" + query
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await client.request(method, url, headers=headers)
         if response.status_code >= 400:
@@ -74,8 +67,7 @@ class BinanceAdapter(BrokerAdapter):
         return True
 
     async def get_server_time(self) -> int:
-        result = await self._request("GET", "/api/v3/time")
-        return int(result["serverTime"])
+        return int((await self._request("GET", "/api/v3/time"))["serverTime"])
 
     async def get_balance(self) -> dict[str, float]:
         if self.account.mode == "PAPER":
@@ -91,31 +83,29 @@ class BinanceAdapter(BrokerAdapter):
 
     async def get_positions(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
-            return [{"asset": asset.removesuffix("USDT"), "quantity": qty}
-                    for asset, qty in self._paper_positions.items() if qty > 0]
+            return [{"asset": s.removesuffix("USDT"), "quantity": q}
+                    for s, q in self._paper_positions.items() if q > 0]
         balances = await self.get_balance()
-        return [{"asset": asset, "quantity": quantity} for asset, quantity in balances.items()
-                if asset not in {"USDT", "USDC", "BUSD"}]
+        return [{"asset": a, "quantity": q} for a, q in balances.items()
+                if a not in {"USDT", "USDC", "BUSD"}]
 
     async def get_open_orders(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
-            return list(self._paper_orders.values())
-        # Binance requires symbol for this endpoint; caller can reconcile per symbol.
+            return [o for o in self._paper_orders.values() if o.get("status") not in {"FILLED", "CANCELED"}]
         return []
 
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs: Any):
         if quantity <= 0:
             raise ValueError("quantity must be positive")
-        symbol = symbol.upper()
-        side = side.upper()
-        order_type = order_type.upper()
+        symbol, side, order_type = symbol.upper(), side.upper(), order_type.upper()
         client_id = kwargs.get("client_order_id")
 
         if self.account.mode == "PAPER":
-            price = float(kwargs.get("price") or kwargs.get("limit_price") or 0)
+            meta = kwargs.get("metadata") or {}
+            price = float(kwargs.get("price") or kwargs.get("limit_price") or meta.get("price") or 0)
             if price <= 0:
-                raise ValueError("PAPER order requires current price via price/limit_price")
+                raise ValueError("PAPER order requires current price")
             base = symbol.removesuffix("USDT")
             if side == "BUY":
                 cost = quantity * price
@@ -141,8 +131,7 @@ class BinanceAdapter(BrokerAdapter):
 
         if not self._execution_allowed():
             raise BinanceAPIError("Execution is disabled for this account mode")
-        params: dict[str, Any] = {"symbol": symbol, "side": side, "type": order_type,
-                                  "quantity": quantity}
+        params = {"symbol": symbol, "side": side, "type": order_type, "quantity": quantity}
         if client_id:
             params["newClientOrderId"] = client_id
         if order_type == "LIMIT":
