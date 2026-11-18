@@ -23,6 +23,7 @@ class OrderUpdate:
     executed_quantity: float = 0.0
     average_price: float | None = None
     broker_order_id: str | None = None
+    side: str | None = None
 
     def __post_init__(self):
         if self.executed_quantity < 0:
@@ -33,17 +34,26 @@ class OrderLifecycle:
     _terminal = {OrderStatus.FILLED, OrderStatus.CANCELED, OrderStatus.REJECTED, OrderStatus.EXPIRED}
 
     def __init__(self):
-        self._orders: dict[str, OrderUpdate] = {}
+        self._orders: dict[tuple[str, str, str], OrderUpdate] = {}
+
+    @staticmethod
+    def _key(update: OrderUpdate) -> tuple[str, str, str]:
+        return (update.broker.upper(), update.account_id, update.client_order_id)
 
     def apply(self, update: OrderUpdate) -> OrderUpdate:
-        current = self._orders.get(update.client_order_id)
+        key = self._key(update)
+        current = self._orders.get(key)
         if current and current.status in self._terminal:
             return current
-        self._orders[update.client_order_id] = update
+        self._orders[key] = update
         return update
 
-    def get(self, client_order_id: str) -> OrderUpdate | None:
-        return self._orders.get(client_order_id)
+    def get(self, client_order_id: str, account_id: str | None = None,
+            broker: str | None = None) -> OrderUpdate | None:
+        if account_id is not None and broker is not None:
+            return self._orders.get((broker.upper(), account_id, client_order_id))
+        matches = [u for k, u in self._orders.items() if k[2] == client_order_id]
+        return matches[0] if len(matches) == 1 else None
 
     def snapshot(self) -> list[OrderUpdate]:
         return list(self._orders.values())
