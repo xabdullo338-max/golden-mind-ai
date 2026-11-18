@@ -17,11 +17,13 @@ class BinanceAdapter(BrokerAdapter):
 
     def __init__(self, account_id: str, api_key: str = "", api_secret: str = "",
                  base_url: str = "https://testnet.binance.vision", mode: str = "PAPER",
-                 initial_quote_balance: float = 300.0, timeout_seconds: float = 10.0):
+                 initial_quote_balance: float = 300.0, timeout_seconds: float = 10.0,
+                 reconciliation_symbols: tuple[str, ...] = ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT")):
         self.account = BrokerAccount(account_id, "BINANCE", mode)
         self.api_key, self.api_secret = api_key, api_secret
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.reconciliation_symbols = tuple(s.upper() for s in reconciliation_symbols if s.strip())
         self._paper_cash = float(initial_quote_balance)
         self._paper_positions: dict[str, float] = {}
         self._paper_orders: dict[str, dict[str, Any]] = {}
@@ -89,10 +91,25 @@ class BinanceAdapter(BrokerAdapter):
         return [{"asset": a, "quantity": q} for a, q in balances.items()
                 if a not in {"USDT", "USDC", "BUSD"}]
 
-    async def get_open_orders(self) -> list[dict[str, Any]]:
+    async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
-            return [o for o in self._paper_orders.values() if o.get("status") not in {"FILLED", "CANCELED"}]
-        return []
+            orders = [o for o in self._paper_orders.values()
+                      if o.get("status") not in {"FILLED", "CANCELED"}]
+            if symbol:
+                return [o for o in orders if str(o.get("symbol", "")).upper() == symbol.upper()]
+            return orders
+
+        symbols = (symbol.upper(),) if symbol else self.reconciliation_symbols
+        if not symbols:
+            raise BinanceAPIError("At least one reconciliation symbol is required")
+
+        results: list[dict[str, Any]] = []
+        for item in symbols:
+            orders = await self._request(
+                "GET", "/api/v3/openOrders", signed=True, params={"symbol": item}
+            )
+            results.extend(orders)
+        return results
 
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs: Any):
