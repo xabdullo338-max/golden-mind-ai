@@ -34,13 +34,18 @@ class ExecutionCoordinator:
 
     async def broker_update(self, update: OrderUpdate) -> OrderUpdate:
         applied = self.lifecycle.apply(update)
-        delta = self.execution_ledger.delta(applied.client_order_id, applied.executed_quantity)
+        delta = self.execution_ledger.delta(
+            applied.client_order_id,
+            applied.executed_quantity,
+            account_id=applied.account_id,
+            broker=applied.broker,
+        )
 
         if (self.positions and delta > 0 and
                 applied.status in {OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED} and
                 applied.average_price is not None):
             saved = self.journal.get_order(applied.client_order_id) or {}
-            side = str(saved.get("side", "")).upper()
+            side = str(saved.get("side") or applied.side or "").upper()
             if side in {"BUY", "SELL"}:
                 self.positions.apply_fill(applied.account_id, applied.symbol, side,
                                            delta, applied.average_price)
@@ -51,7 +56,7 @@ class ExecutionCoordinator:
             account_id=applied.account_id,
             broker=applied.broker,
             symbol=applied.symbol,
-            side=str(saved.get("side", "UNKNOWN")),
+            side=str(saved.get("side") or applied.side or "UNKNOWN"),
             quantity=applied.executed_quantity,
             status=applied.status.value,
             broker_order_id=applied.broker_order_id,
