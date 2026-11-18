@@ -10,7 +10,7 @@ android {
         applicationId = "com.goldenmind.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        versionCode = 3
         versionName = "1.1.0"
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
     }
