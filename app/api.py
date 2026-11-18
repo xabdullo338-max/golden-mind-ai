@@ -14,7 +14,7 @@ from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
 from .ws import install_websocket_routes
 
-app = FastAPI(title="Golden Mind AI API", version="0.3.0")
+app = FastAPI(title="Golden Mind AI API", version="0.4.0")
 accounts = AccountManager()
 kill_switch = KillSwitch()
 execution_gate = ExecutionGate()
