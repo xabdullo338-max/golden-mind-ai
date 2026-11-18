@@ -5,9 +5,9 @@ from typing import Any
 
 from .event_bus import EventBus, TradingEvent
 from .order_models import OrderRequest, OrderSide
-from .risk import RiskConfig
 from .scalping_engine import ScalpingEngine
 from .trade_planner import TradePlanner
+from .portfolio_risk import PortfolioRiskEngine
 
 @dataclass(frozen=True)
 class ScalpExecutionResult:
@@ -37,9 +37,8 @@ class ScalpExecutionPipeline:
         if account_id not in self.trade_planners:
             self.trade_planners[account_id] = TradePlanner(
                 strategy=None,
-                risk_config=RiskConfig(max_risk_per_trade_pct=0.25,
-                                       max_daily_loss_pct=3.0,
-                                       max_open_positions=3),
+                risk=PortfolioRiskEngine(max_daily_loss_pct=3.0,
+                                         max_risk_per_trade_pct=0.25),
             )
         return self.trade_planners[account_id]
 
