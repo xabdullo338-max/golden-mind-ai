@@ -6,6 +6,7 @@ from typing import Any
 from .event_bus import EventBus, TradingEvent
 from .journal import JournalOrder, TradingJournal
 from .order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
+from .position_engine import PositionEngine
 
 @dataclass
 class ExecutionCoordinator:
@@ -14,6 +15,7 @@ class ExecutionCoordinator:
     lifecycle: OrderLifecycle
     journal: TradingJournal
     event_bus: EventBus
+    positions: PositionEngine | None = None
 
     async def submitted(
         self,
@@ -45,6 +47,11 @@ class ExecutionCoordinator:
 
     async def broker_update(self, update: OrderUpdate) -> OrderUpdate:
         applied = self.lifecycle.apply(update)
+        if self.positions and applied.status in {OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED} and applied.average_price is not None and applied.executed_quantity > 0:
+            side = self.journal.get_order(applied.client_order_id) or {}
+            order_side = str(side.get("side", "UNKNOWN")).upper()
+            if order_side in {"BUY", "SELL"}:
+                self.positions.apply_fill(applied.account_id, applied.symbol, order_side, applied.executed_quantity, applied.average_price)
         self.journal.upsert_order(JournalOrder(
             client_order_id=applied.client_order_id,
             account_id=applied.account_id,
