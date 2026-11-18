@@ -5,6 +5,7 @@ from .market_data import MarketTick
 from .order_models import OrderSide
 from .scalping_filter import ScalpingFilter
 from .trade_rate_limiter import TradeRateLimiter
+from .market_data_guard import MarketDataFreshnessGuard
 
 @dataclass(frozen=True)
 class ScalpingEngineConfig:
@@ -13,6 +14,7 @@ class ScalpingEngineConfig:
     cooldown_seconds: float = 0.5
     max_trades_per_hour: int = 100
     allow_short: bool = False
+    max_market_data_age_seconds: float = 2.0
 
 @dataclass(frozen=True)
 class ScalpingSignal:
@@ -30,6 +32,7 @@ class ScalpingEngine:
         self.config = config or ScalpingEngineConfig()
         self.filter = ScalpingFilter(config=self._filter_config())
         self.limiters: dict[str, TradeRateLimiter] = {}
+        self.freshness = MarketDataFreshnessGuard(self.config.max_market_data_age_seconds)
 
     def _filter_config(self):
         from .scalping_filter import ScalpingFilterConfig
@@ -46,6 +49,8 @@ class ScalpingEngine:
     def generate(self, account_id: str, tick: MarketTick,
                  reference_price: float) -> ScalpingSignal | None:
         if reference_price <= 0 or tick.price <= 0:
+            return None
+        if not self.freshness.is_fresh(tick):
             return None
         if not self.filter.accept(tick.price, reference_price, tick.bid, tick.ask):
             return None
