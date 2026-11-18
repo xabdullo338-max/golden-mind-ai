@@ -10,6 +10,7 @@ from .event_bus import EventBus, TradingEvent
 from .execution_gate import ExecutionGate
 from .kill_switch import KillSwitch
 from .order_models import OrderRequest, OrderSide, OrderType
+from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
 from .ws import install_websocket_routes
 
@@ -18,6 +19,12 @@ accounts = AccountManager()
 kill_switch = KillSwitch()
 execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
+order_router = OrderRouter(
+    accounts,
+    kill_switch=kill_switch,
+    execution_gate=execution_gate,
+    portfolio_state=portfolio_state,
+)
 event_bus = EventBus()
 install_websocket_routes(app, event_bus)
 
@@ -97,42 +104,38 @@ async def enable_account(account_id: str, _: dict = Depends(require_scope("admin
     await event_bus.publish(TradingEvent.create("ACCOUNT_ENABLED", account_id))
     return {"account_id": account_id, "enabled": True}
 
-def _execution_mode_allowed(account) -> bool:
-    # Non-real-money modes are allowed; LIVE needs an explicit global safety flag.
-    if account.mode in {"PAPER", "TESTNET", "DEMO"}:
-        return True
-    return account.mode == "LIVE" and os.getenv("GMAI_LIVE_TRADING", "false").lower() in {"1", "true", "yes"}
-
 @app.post("/accounts/{account_id}/orders")
 async def place_order(account_id: str, body: OrderBody, _: dict = Depends(require_scope("trade"))):
     managed = accounts.accounts.get(account_id)
     if managed is None:
         raise HTTPException(status_code=404, detail="account not found")
-    state = portfolio_state.get(account_id)
-    if state is None or not state.confirmed:
-        raise HTTPException(status_code=409, detail="broker state is not reconciled")
+
+    order = OrderRequest(
+        client_order_id=body.client_order_id,
+        symbol=body.symbol,
+        side=body.side,
+        quantity=body.quantity,
+        order_type=body.order_type,
+        limit_price=body.limit_price,
+        metadata={"price": body.price} if body.price else {},
+    )
 
     try:
-        execution_gate.assert_ready(
-            account_enabled=managed.enabled,
-            state_confirmed=state.confirmed,
-            # Until a real AccountSnapshot provider is injected, never claim
-            # that LIVE has passed the daily-loss gate.
-            daily_loss_ok=managed.adapter.account.mode != "LIVE",
-            live_enabled=_execution_mode_allowed(managed.adapter.account),
-        )
+        result = await order_router.route(account_id, order)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-
-    order = OrderRequest(client_order_id=body.client_order_id, symbol=body.symbol,
-                         side=body.side, quantity=body.quantity,
-                         order_type=body.order_type, limit_price=body.limit_price,
-                         metadata={"price": body.price} if body.price else {})
-    try:
-        result = await accounts.order_to(account_id, order)
-    except (KeyError, RuntimeError, ValueError) as exc:
+    except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    await event_bus.publish(TradingEvent.create("ORDER_SUBMITTED", account_id,
-        symbol=body.symbol, side=body.side.value, quantity=body.quantity,
-        order_type=body.order_type.value, mode=managed.adapter.account.mode))
+
+    await event_bus.publish(
+        TradingEvent.create(
+            "ORDER_SUBMITTED",
+            account_id,
+            symbol=body.symbol,
+            side=body.side.value,
+            quantity=body.quantity,
+            order_type=body.order_type.value,
+            mode=managed.adapter.account.mode,
+        )
+    )
     return result
