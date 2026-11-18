@@ -20,3 +20,11 @@ def test_engine_respects_hourly_limit():
     assert engine.can_submit("A")
     engine.record_submission("A")
     assert not engine.can_submit("A")
+
+
+def test_engine_rejects_stale_tick():
+    from datetime import timedelta, timezone
+    now = datetime.now(timezone.utc)
+    engine = ScalpingEngine(ScalpingEngineConfig(min_move_pct=0.01, max_market_data_age_seconds=2.0))
+    tick = MarketTick("BINANCE", "BTCUSDT", 100.2, now - timedelta(seconds=3), 100.15, 100.20)
+    assert engine.generate("BINANCE-01", tick, 100) is None
