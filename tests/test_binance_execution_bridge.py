@@ -75,3 +75,19 @@ def test_lifecycle_and_ledger_are_account_scoped():
     assert lifecycle.get("same", account_id="B", broker="BINANCE").executed_quantity == 2.0
     assert ledger.delta("same", 1.0, account_id="A", broker="BINANCE") == 1.0
     assert ledger.delta("same", 2.0, account_id="B", broker="BINANCE") == 2.0
+
+
+def test_bridge_disconnect_marks_account_unconfirmed():
+    from app.portfolio_state import PortfolioStateManager
+    from app.event_bus import EventBus
+    from app.execution_coordinator import ExecutionCoordinator
+    from app.journal import TradingJournal
+    from app.order_lifecycle import OrderLifecycle
+
+    state = PortfolioStateManager()
+    coordinator = ExecutionCoordinator(
+        OrderLifecycle(), TradingJournal(":memory:"), EventBus()
+    )
+    bridge = BinanceExecutionBridge("A", coordinator, portfolio_state=state)
+    bridge.mark_disconnected()
+    assert state.is_confirmed("A") is False
