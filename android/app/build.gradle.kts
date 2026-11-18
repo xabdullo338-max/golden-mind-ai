@@ -6,19 +6,20 @@ plugins {
 android {
     namespace = "com.goldenmind.ai"
     compileSdk = 35
+    val apiBaseUrl = project.findProperty("API_BASE_URL")?.toString() ?: "http://10.0.2.2:8000"
     defaultConfig {
         applicationId = "com.goldenmind.ai"
         minSdk = 26
         targetSdk = 35
         versionCode = 3
         versionName = "1.1.0"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "API_BASE_URL", "\"https://api.example.invalid\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
         debug {
             applicationIdSuffix = ".debug"
