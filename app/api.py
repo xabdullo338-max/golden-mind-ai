@@ -98,9 +98,10 @@ async def enable_account(account_id: str, _: dict = Depends(require_scope("admin
     return {"account_id": account_id, "enabled": True}
 
 def _execution_mode_allowed(account) -> bool:
+    # Non-real-money modes are allowed; LIVE needs an explicit global safety flag.
     if account.mode in {"PAPER", "TESTNET", "DEMO"}:
         return True
-    return os.getenv("GMAI_LIVE_TRADING", "false").lower() in {"1", "true", "yes"}
+    return account.mode == "LIVE" and os.getenv("GMAI_LIVE_TRADING", "false").lower() in {"1", "true", "yes"}
 
 @app.post("/accounts/{account_id}/orders")
 async def place_order(account_id: str, body: OrderBody, _: dict = Depends(require_scope("trade"))):
@@ -115,7 +116,9 @@ async def place_order(account_id: str, body: OrderBody, _: dict = Depends(requir
         execution_gate.assert_ready(
             account_enabled=managed.enabled,
             state_confirmed=state.confirmed,
-            daily_loss_ok=True,
+            # Until a real AccountSnapshot provider is injected, never claim
+            # that LIVE has passed the daily-loss gate.
+            daily_loss_ok=managed.adapter.account.mode != "LIVE",
             live_enabled=_execution_mode_allowed(managed.adapter.account),
         )
     except RuntimeError as exc:
