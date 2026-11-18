@@ -78,3 +78,31 @@ def test_live_daily_loss_uses_snapshot():
     )
 
     assert router._daily_loss_ok("A", live=True) is False
+
+
+@pytest.mark.asyncio
+async def test_recovery_reopens_execution_gate(tmp_path):
+    from app.journal import TradingJournal
+    from app.recovery import BrokerRecovery
+
+    manager = AccountManager()
+    manager.register(FakeBroker())
+    state = PortfolioStateManager()
+    router = OrderRouter(
+        manager,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+    )
+    journal = TradingJournal(str(tmp_path / "journal.db"))
+    recovery = BrokerRecovery(manager, state, journal)
+
+    with pytest.raises(RuntimeError, match="Broker state is not reconciled"):
+        await router.route("A", OrderRequest("before-recovery", "BTCUSDT", OrderSide.BUY, 0.01))
+
+    result = await recovery.recover_account("A")
+    assert result.confirmed is True
+
+    response = await router.route(
+        "A", OrderRequest("after-recovery", "BTCUSDT", OrderSide.BUY, 0.01)
+    )
+    assert response["status"] == "PAPER"
