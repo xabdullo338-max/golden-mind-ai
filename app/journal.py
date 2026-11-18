@@ -22,9 +22,9 @@ class TradingJournal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS orders (
-                client_order_id TEXT PRIMARY KEY, account_id TEXT NOT NULL, broker TEXT NOT NULL,
+                client_order_id TEXT NOT NULL, account_id TEXT NOT NULL, broker TEXT NOT NULL,
                 symbol TEXT NOT NULL, side TEXT NOT NULL, quantity REAL NOT NULL, status TEXT NOT NULL,
-                broker_order_id TEXT)""")
+                broker_order_id TEXT, PRIMARY KEY (broker, account_id, client_order_id))""")
             db.commit()
 
     def _connect(self):
@@ -34,16 +34,16 @@ class TradingJournal:
         with self._connect() as db:
             db.execute("""INSERT INTO orders(client_order_id,account_id,broker,symbol,side,quantity,status,broker_order_id)
                          VALUES(?,?,?,?,?,?,?,?)
-                         ON CONFLICT(client_order_id) DO UPDATE SET status=excluded.status,
+                         ON CONFLICT(broker, account_id, client_order_id) DO UPDATE SET status=excluded.status,
                          broker_order_id=excluded.broker_order_id, quantity=excluded.quantity""",
                        (order.client_order_id, order.account_id, order.broker, order.symbol,
                         order.side, order.quantity, order.status, order.broker_order_id))
             db.commit()
 
-    def get_order(self, client_order_id: str) -> dict[str, Any] | None:
+    def get_order(self, client_order_id: str, account_id: str | None = None, broker: str | None = None) -> dict[str, Any] | None:
         with self._connect() as db:
             db.row_factory = sqlite3.Row
-            row = db.execute("SELECT * FROM orders WHERE client_order_id=?", (client_order_id,)).fetchone()
+            row = db.execute("(SELECT * FROM orders WHERE client_order_id=? AND account_id=? AND broker=?)", (client_order_id,)).fetchone()
             return dict(row) if row else None
 
     def list_open_orders(self) -> list[dict[str, Any]]:
