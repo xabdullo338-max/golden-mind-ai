@@ -50,5 +50,5 @@ class TradingJournal:
         terminal = ("FILLED", "CANCELED", "REJECTED", "EXPIRED")
         with self._connect() as db:
             db.row_factory = sqlite3.Row
-            rows = db.execute("SELECT * FROM orders WHERE status NOT IN (?,?,?)", terminal[:3]).fetchall()
+            rows = db.execute("SELECT * FROM orders WHERE status NOT IN (?,?,?,?)", terminal).fetchall()
             return [dict(r) for r in rows]
