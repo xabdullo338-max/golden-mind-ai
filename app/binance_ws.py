@@ -11,7 +11,7 @@ EventHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 @dataclass
 class BinanceWebSocketConfig:
-    url: str = "wss://stream.binance.com:9443/ws-api/v3"
+    url: str = "wss://ws-api.binance.com:443/ws-api/v3"
     reconnect_seconds: float = 3.0
     ping_interval: float = 20.0
 
@@ -31,11 +31,11 @@ class BinanceWebSocketClient:
         self._request_id = 0
 
     async def start(self, handler: EventHandler | None = None,
-                    listen_key: str | None = None) -> None:
+                    api_key: str | None = None) -> None:
         if self._task and not self._task.done():
             return
         self._stop.clear()
-        self._task = asyncio.create_task(self.run_forever(handler, listen_key))
+        self._task = asyncio.create_task(self.run_forever(handler, api_key))
 
     async def stop(self) -> None:
         self._stop.set()
@@ -43,8 +43,8 @@ class BinanceWebSocketClient:
             await self._task
 
     async def run_forever(self, handler: EventHandler | None = None,
-                          listen_key: str | None = None) -> None:
-        url = self._stream_url(listen_key)
+                          api_key: str | None = None) -> None:
+        url = self._stream_url(api_key)
         while not self._stop.is_set():
             try:
                 async with websockets.connect(
@@ -56,22 +56,22 @@ class BinanceWebSocketClient:
                 if not self._stop.is_set():
                     await asyncio.sleep(self.config.reconnect_seconds)
 
-    def _stream_url(self, listen_key: str | None) -> str:
-        if not listen_key:
+    def _stream_url(self, api_key: str | None) -> str:
+        if not api_key:
             return self.config.url
-        return f"wss://stream.binance.com:9443/ws/{listen_key}"
+        return f"wss://stream.binance.com:9443/ws/{api_key}"
 
-    async def subscribe_user_stream(self, ws: Any, listen_key: str) -> None:
+    async def subscribe_user_stream(self, ws: Any, api_key: str) -> None:
         # Kept as an explicit method so the session layer can evolve with
         # Binance's current user-stream protocol without mixing credentials
         # into the event consumer.
-        if not listen_key.strip():
-            raise ValueError("listen_key is required")
+        if not api_key.strip():
+            raise ValueError("api_key is required")
         self._request_id += 1
         await ws.send(json.dumps({
             "id": self._request_id,
             "method": "userDataStream.subscribe.signature",
-            "params": {"apiKey": listen_key},
+            "params": {"apiKey": api_key},
         }))
 
     async def _consume(self, ws: Any, handler: EventHandler | None) -> None:
@@ -93,7 +93,6 @@ class BinanceEventNormalizer:
             "outboundAccountPosition": "POSITION_UPDATE",
             "balanceUpdate": "BALANCE_UPDATE",
             "ACCOUNT_UPDATE": "ACCOUNT_UPDATE",
-            "executionReport": "ORDER_UPDATE",
         }
         return TradingEvent.create(mapping.get(event_type, event_type),
                                     account_id, broker_event=message)
