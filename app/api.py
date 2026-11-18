@@ -69,7 +69,7 @@ async def account_state(account_id: str, _: dict = Depends(require_scope("read")
     if state is None:
         raise HTTPException(status_code=404, detail="account state not found")
     return {"account_id": state.account_id, "broker": state.broker,
-            "positions": state.positions, "open_orders": state.open_orders,
+            "balances": state.balances, "positions": state.positions, "open_orders": state.open_orders,
             "executions": state.executions, "confirmed": state.confirmed}
 
 @app.post("/kill-switch/stop")
