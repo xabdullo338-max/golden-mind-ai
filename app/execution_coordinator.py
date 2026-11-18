@@ -44,13 +44,13 @@ class ExecutionCoordinator:
         if (self.positions and delta > 0 and
                 applied.status in {OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED} and
                 applied.average_price is not None):
-            saved = self.journal.get_order(applied.client_order_id) or {}
+            saved = self.journal.get_order(applied.client_order_id, applied.account_id, applied.broker) or {}
             side = str(saved.get("side") or applied.side or "").upper()
             if side in {"BUY", "SELL"}:
                 self.positions.apply_fill(applied.account_id, applied.symbol, side,
                                            delta, applied.average_price)
 
-        saved = self.journal.get_order(applied.client_order_id) or {}
+        saved = self.journal.get_order(applied.client_order_id, applied.account_id, applied.broker) or {}
         self.journal.upsert_order(JournalOrder(
             client_order_id=applied.client_order_id,
             account_id=applied.account_id,
