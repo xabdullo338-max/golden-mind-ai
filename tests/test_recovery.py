@@ -44,6 +44,7 @@ async def test_recovery_reconciles_and_confirms_state(tmp_path):
     assert state.is_confirmed("A") is True
     recovered = state.get("A")
     assert recovered is not None
+    assert recovered.balances == {"USD": 1000.0}
     assert recovered.positions == {"BTC": 0.25}
     assert recovered.open_orders == [{"symbol": "BTCUSDT", "status": "NEW"}]
 
