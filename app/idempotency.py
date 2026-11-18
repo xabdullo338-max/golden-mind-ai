@@ -26,6 +26,9 @@ class OrderIdempotencyGuard:
         self._seen[client_order_id] = monotonic()
         return IdempotencyDecision(True, "allowed")
 
+    def forget(self, client_order_id: str) -> None:
+        self._seen.pop(client_order_id, None)
+
     def _prune(self) -> None:
         cutoff = monotonic() - self.ttl_seconds
         for key, created in list(self._seen.items()):
