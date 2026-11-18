@@ -26,6 +26,13 @@ class BrokerRecovery:
         try:
             positions = await adapter.get_positions()
             open_orders = await adapter.get_open_orders()
+            self.portfolio_state.reconcile(
+                account_id=account_id,
+                broker=adapter.account.broker,
+                positions=positions,
+                open_orders=open_orders,
+                executions=[],
+            )
             return RecoveryResult(
                 account_id=account_id,
                 broker_positions=positions,
