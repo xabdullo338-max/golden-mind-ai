@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 import websockets
@@ -14,12 +17,13 @@ class BinanceWebSocketConfig:
     url: str = "wss://ws-api.binance.com:443/ws-api/v3"
     reconnect_seconds: float = 3.0
     ping_interval: float = 20.0
+    recv_window: int = 5000
 
 class BinanceWebSocketClient:
     """Resilient Binance Spot WebSocket API transport.
 
-    The client can subscribe to user-data streams using a listen key supplied
-    by the account/session layer. It never contains trading policy.
+    User-data subscriptions use Binance's current signed WebSocket API
+    subscription method. No legacy listenKey is used.
     """
 
     def __init__(self, config: BinanceWebSocketConfig | None = None,
@@ -31,11 +35,12 @@ class BinanceWebSocketClient:
         self._request_id = 0
 
     async def start(self, handler: EventHandler | None = None,
-                    api_key: str | None = None) -> None:
+                    api_key: str | None = None,
+                    api_secret: str | None = None) -> None:
         if self._task and not self._task.done():
             return
         self._stop.clear()
-        self._task = asyncio.create_task(self.run_forever(handler, api_key))
+        self._task = asyncio.create_task(self.run_forever(handler, api_key, api_secret))
 
     async def stop(self) -> None:
         self._stop.set()
@@ -43,35 +48,50 @@ class BinanceWebSocketClient:
             await self._task
 
     async def run_forever(self, handler: EventHandler | None = None,
-                          api_key: str | None = None) -> None:
-        url = self._stream_url(api_key)
+                          api_key: str | None = None,
+                          api_secret: str | None = None) -> None:
+        if (api_key and not api_secret) or (api_secret and not api_key):
+            raise ValueError("api_key and api_secret must be supplied together")
         while not self._stop.is_set():
             try:
                 async with websockets.connect(
-                    url, ping_interval=self.config.ping_interval,
-                    ping_timeout=self.config.ping_interval, close_timeout=5,
+                    self.config.url,
+                    ping_interval=self.config.ping_interval,
+                    ping_timeout=self.config.ping_interval,
+                    close_timeout=5,
                 ) as ws:
+                    if api_key:
+                        await self.subscribe_user_stream(ws, api_key, api_secret)
                     await self._consume(ws, handler)
             except (OSError, asyncio.TimeoutError, websockets.WebSocketException):
                 if not self._stop.is_set():
                     await asyncio.sleep(self.config.reconnect_seconds)
 
-    def _stream_url(self, api_key: str | None) -> str:
-        if not api_key:
-            return self.config.url
-        return f"wss://stream.binance.com:9443/ws/{api_key}"
+    @staticmethod
+    def _signature(params: dict[str, Any], api_secret: str) -> str:
+        payload = "&".join(
+            f"{key}={str(params[key]).lower() if isinstance(params[key], bool) else params[key]}"
+            for key in sorted(params)
+        )
+        return hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
-    async def subscribe_user_stream(self, ws: Any, api_key: str) -> None:
-        # Kept as an explicit method so the session layer can evolve with
-        # Binance's current user-stream protocol without mixing credentials
-        # into the event consumer.
+    async def subscribe_user_stream(self, ws: Any, api_key: str,
+                                     api_secret: str | None = None) -> None:
         if not api_key.strip():
             raise ValueError("api_key is required")
+        if not api_secret:
+            raise ValueError("api_secret is required for signed user stream subscription")
         self._request_id += 1
+        params: dict[str, Any] = {
+            "apiKey": api_key,
+            "timestamp": int(time.time() * 1000),
+            "recvWindow": self.config.recv_window,
+        }
+        params["signature"] = self._signature(params, api_secret)
         await ws.send(json.dumps({
             "id": self._request_id,
             "method": "userDataStream.subscribe.signature",
-            "params": {"apiKey": api_key},
+            "params": params,
         }))
 
     async def _consume(self, ws: Any, handler: EventHandler | None) -> None:
@@ -79,7 +99,11 @@ class BinanceWebSocketClient:
             message = json.loads(raw)
             if handler:
                 await handler(message)
-            event_type = message.get("event") or message.get("method") or "UNKNOWN"
+            event = message.get("event")
+            event_type = (
+                event.get("e") if isinstance(event, dict)
+                else message.get("event") or message.get("method") or "UNKNOWN"
+            )
             await self.event_bus.publish(TradingEvent.create(
                 "BROKER_WS_EVENT", payload=message, broker_event_type=event_type
             ))
@@ -87,12 +111,15 @@ class BinanceWebSocketClient:
 class BinanceEventNormalizer:
     @staticmethod
     def normalize(message: dict[str, Any], account_id: str) -> TradingEvent:
-        event_type = message.get("event") or message.get("method") or "UNKNOWN"
+        event = message.get("event")
+        payload = event if isinstance(event, dict) else message
+        event_type = payload.get("e") or message.get("method") or "UNKNOWN"
         mapping = {
             "executionReport": "ORDER_UPDATE",
             "outboundAccountPosition": "POSITION_UPDATE",
             "balanceUpdate": "BALANCE_UPDATE",
+            "eventStreamTerminated": "STREAM_TERMINATED",
             "ACCOUNT_UPDATE": "ACCOUNT_UPDATE",
         }
         return TradingEvent.create(mapping.get(event_type, event_type),
-                                    account_id, broker_event=message)
+                                    account_id, broker_event=payload)
