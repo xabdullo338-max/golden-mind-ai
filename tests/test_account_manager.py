@@ -14,6 +14,9 @@ class FakeAdapter(BrokerAdapter):
     async def get_positions(self):
         return []
 
+    async def get_open_orders(self):
+        return []
+
     async def place_order(self, symbol, side, quantity, order_type="MARKET", **kwargs):
         self.orders.append((symbol, side, quantity, order_type, kwargs))
         return {"status": "PAPER", "account_id": self.account.account_id, "symbol": symbol}
