@@ -15,3 +15,9 @@ def live_trading_enabled() -> bool:
 def assert_live_enabled() -> None:
     if not live_trading_enabled():
         raise RuntimeError("Live trading is disabled. Set GMAI_LIVE_TRADING=true only after validation.")
+
+def validate_live_configuration() -> None:
+    if not live_trading_enabled():
+        return
+    required_secret("BINANCE_API_KEY")
+    required_secret("BINANCE_API_SECRET")
