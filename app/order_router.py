@@ -21,7 +21,7 @@ class OrderRouter:
             return await self.accounts.order_to(account_id, order)
         except Exception:
             # Do not permanently consume an ID when the broker never accepted it.
-            self.idempotency._seen.pop(f"{account_id}:{order.client_order_id}", None)
+            self.idempotency.forget(f"{account_id}:{order.client_order_id}")
             raise
 
     async def broadcast(self, order: OrderRequest) -> list[dict[str, Any]]:
