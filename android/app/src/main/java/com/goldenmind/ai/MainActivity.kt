@@ -31,6 +31,45 @@ private val Red = Color(0xFFFF6B78)
 private val Amber = Color(0xFFFFC857)
 private val Blue = Color(0xFF5E8BFF)
 
+@Composable
+fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Box(Modifier.fillMaxSize().background(Bg).padding(24.dp), contentAlignment = Alignment.Center) {
+        Surface(shape = RoundedCornerShape(28.dp), color = Card, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Bolt, null, tint = Blue, modifier = Modifier.size(48.dp))
+                Text("GOLDEN MIND AI", fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Secure backend control center", color = Muted, fontSize = 12.sp)
+                Spacer(Modifier.height(20.dp))
+                OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true)
+                error?.let { Text(it, color = Red, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
+                Spacer(Modifier.height(16.dp))
+                Button(enabled = !busy && username.isNotBlank() && password.isNotBlank(), onClick = {
+                    busy = true
+                    Thread {
+                        try {
+                            api.login(username, password)
+                            android.os.Handler(android.os.Looper.getMainLooper()).post { busy = false; onLoggedIn() }
+                        } catch (e: Exception) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post { busy = false; error = e.message ?: "Login failed" }
+                        }
+                    }.start()
+                }, Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp)) {
+                    Text(if (busy) "CONNECTING…" else "SIGN IN", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text("Broker API secrets are not stored in the APK.", color = Muted, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,8 +80,22 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoldenMindApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val api = remember { GoldenMindApi(context) }
     var selected by remember { mutableIntStateOf(0) }
     var trading by remember { mutableStateOf(false) }
+    var session by remember { mutableStateOf(api.hasSession()) }
+    var health by remember { mutableStateOf<ApiHealth?>(null) }
+    var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }
+    if (!session) {
+        LoginScreen(api) { session = true }
+        return
+    }
+    LaunchedEffect(Unit) {
+        Thread {
+            runCatching { api.health() }.onSuccess { h -> androidx.compose.ui.platform.LocalContext.current }
+        }.start()
+    }
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Card, primary = Blue, onBackground = Txt, onSurface = Txt)) {
         Scaffold(
             containerColor = Bg,
