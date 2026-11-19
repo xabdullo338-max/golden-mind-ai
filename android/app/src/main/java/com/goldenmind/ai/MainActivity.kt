@@ -166,56 +166,54 @@ fun StatCard(label: String, value: String, detail: String, positive: Boolean = t
 }
 
 @Composable
-fun DashboardScreen(trading: Boolean, onToggle: () -> Unit, padding: PaddingValues) {
+fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Boolean, error: String?, padding: PaddingValues, onRefresh: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Header("Golden Mind", "AI Trading Control Center")
-                Surface(shape = CircleShape, color = Card2) { IconButton({}) { Icon(Icons.Default.NotificationsNone, "Notifications", tint = Txt) } }
+                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Txt) }
             }
         }
+        error?.let { msg -> item { Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF2A1820)) {
+            Text(msg, color = Red, fontSize = 12.sp, modifier = Modifier.padding(14.dp))
+        } } }
         item {
-            Surface(shape = RoundedCornerShape(24.dp), color = if (trading) Color(0xFF10271F) else Card) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(if (trading) Green else Muted))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(if (trading) "TRADING ACTIVE" else "TRADING PAUSED", color = Txt, fontWeight = FontWeight.Bold)
-                        Text(if (trading) "Paper mode • execution gate ready" else "Safe state • no new orders", color = Muted, fontSize = 12.sp)
+            Surface(shape = RoundedCornerShape(24.dp), color = Card) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Backend status", color = Muted, fontSize = 12.sp)
+                    Spacer(Modifier.height(7.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(if (health?.status == "ok") Green else Amber))
+                        Spacer(Modifier.width(10.dp))
+                        Text(health?.status?.uppercase() ?: if (loading) "CONNECTING…" else "OFFLINE", color = Txt, fontWeight = FontWeight.Bold)
                     }
-                    Switch(trading, { onToggle() })
+                    Spacer(Modifier.height(14.dp))
+                    StatusLine("Mode", health?.tradingMode ?: "—", Amber)
+                    StatusLine("Connected accounts", (health?.accounts ?: accounts.size).toString(), Green)
                 }
             }
         }
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Portfolio balance", color = Muted, fontSize = 12.sp)
-                    Spacer(Modifier.height(7.dp))
-                    Text(health?.tradingMode ?: "—", color = Txt, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("+$4.82  •  +1.61% today", color = Green, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(18.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        repeat(7) { i -> Box(Modifier.weight(1f).height((18 + i * 7).dp).clip(RoundedCornerShape(8.dp)).background(if (i < 4) Blue.copy(alpha=.75f) else Green.copy(alpha=.75f))) }
-                    }
+                    Text("Safety state", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(8.dp))
-                    Text("Last 7 sessions", color = Muted, fontSize = 11.sp)
+                    StatusLine("Execution mode", health?.tradingMode ?: "UNKNOWN", Amber)
+                    StatusLine("Broker connections", if (accounts.isEmpty()) "None" else accounts.size.toString() + " connected", Green)
+                    StatusLine("Broker secrets", "Server-side only", Blue)
+                    StatusLine("Kill switch", "Available in Risk", Blue)
                 }
             }
         }
-        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) { StatCard("Win rate", "67.4%", "24 wins / 12 losses"); StatCard("Open positions", "2", "1.1% portfolio risk") } }
         item {
-            Surface(shape = RoundedCornerShape(22.dp), color = Card) {
-                Column(Modifier.padding(18.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Execution status", fontWeight = FontWeight.Bold)
-                        Text("PAPER", color = Amber, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFF111C2E)) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Security, null, tint = Blue)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Live values only", color = Txt, fontWeight = FontWeight.Bold)
+                        Text("Unavailable P&L and win-rate values are not fabricated.", color = Muted, fontSize = 11.sp)
                     }
-                    Spacer(Modifier.height(14.dp))
-                    StatusLine("Market data", "Fresh • 0.42s", Green)
-                    StatusLine("Broker state", "Reconciled", Green)
-                    StatusLine("Risk engine", "Within limits", Green)
-                    StatusLine("Kill switch", "Armed", Blue)
                 }
             }
         }
@@ -309,19 +307,43 @@ fun SettingRow(label: String, value: String) {
 }
 
 @Composable
-fun AccountsScreen(padding: PaddingValues) {
-    val accounts = listOf(
-        Triple("Connected accounts", accounts.size.toString(), Green)
-    )
+fun AccountsScreen(accounts: List<AccountInfo>, api: GoldenMindApi, padding: PaddingValues) {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Header("Accounts", "Broker connections") }
-        items(accounts) { (name, mode, color) ->
+        if (accounts.isEmpty()) item { Text("No accounts returned by backend.", color = Muted, fontSize = 13.sp) }
+        items(accounts, key = { it.accountId }) { account ->
+            var state by remember(account.accountId) { mutableStateOf<AccountState?>(null) }
+            var error by remember(account.accountId) { mutableStateOf<String?>(null) }
+            LaunchedEffect(account.accountId) {
+                Thread {
+                    try {
+                        val s = api.state(account.accountId)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { state = s }
+                    } catch (e: Exception) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { error = e.message }
+                    }
+                }.start()
+            }
             Surface(shape = RoundedCornerShape(20.dp), color = Card) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(color.copy(alpha=.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.AccountBalance, null, tint = color) }
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) { Text(name, color = Txt, fontWeight = FontWeight.Bold); Text(mode, color = Muted, fontSize = 12.sp) }
-                    Text("READY", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(if (account.enabled) Green.copy(alpha=.15f) else Red.copy(alpha=.15f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.AccountBalance, null, tint = if (account.enabled) Green else Red)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(account.accountId, color = Txt, fontWeight = FontWeight.Bold)
+                            Text(account.broker + " • " + account.mode, color = Muted, fontSize = 12.sp)
+                        }
+                        Text(if (account.enabled) "ENABLED" else "DISABLED", color = if (account.enabled) Green else Red, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("State: " + if (state?.confirmed == true) "RECONCILED" else "UNCONFIRMED",
+                        color = if (state?.confirmed == true) Green else Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    state?.balances?.entries?.take(3)?.forEach { (asset, value) ->
+                        SettingRow(asset, "%.6f".format(java.util.Locale.US, value))
+                    }
+                    error?.let { Text(it, color = Red, fontSize = 10.sp) }
                 }
             }
         }
