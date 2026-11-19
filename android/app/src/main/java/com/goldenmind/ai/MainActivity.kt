@@ -91,9 +91,18 @@ fun GoldenMindApp() {
         LoginScreen(api) { session = true }
         return
     }
+    val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     LaunchedEffect(Unit) {
         Thread {
-            runCatching { api.health() }.onSuccess { h -> androidx.compose.ui.platform.LocalContext.current }
+            try {
+                val h = api.health()
+                val a = api.accounts()
+                mainHandler.post {
+                    health = h
+                    accounts = a
+                }
+            } catch (_: Exception) {
+            }
         }.start()
     }
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Card, primary = Blue, onBackground = Txt, onSurface = Txt)) {
@@ -183,7 +192,7 @@ fun DashboardScreen(trading: Boolean, onToggle: () -> Unit, padding: PaddingValu
                 Column(Modifier.padding(20.dp)) {
                     Text("Portfolio balance", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(7.dp))
-                    Text("$300.00", color = Txt, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(health?.tradingMode ?: "—", color = Txt, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
                     Text("+$4.82  •  +1.61% today", color = Green, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -302,9 +311,7 @@ fun SettingRow(label: String, value: String) {
 @Composable
 fun AccountsScreen(padding: PaddingValues) {
     val accounts = listOf(
-        Triple("PAPER-01", "Paper trading", Green),
-        Triple("BINANCE-01", "TESTNET", Amber),
-        Triple("IBKR-01", "DEMO", Blue)
+        Triple("Connected accounts", accounts.size.toString(), Green)
     )
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Header("Accounts", "Broker connections") }
