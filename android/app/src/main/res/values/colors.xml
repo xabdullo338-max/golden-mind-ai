@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gm_bg">#0B1020</color>
+    <color name="gm_card">#151D33</color>
+    <color name="gm_accent">#38BDF8</color>
+</resources>
