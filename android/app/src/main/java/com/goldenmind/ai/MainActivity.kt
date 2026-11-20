@@ -133,7 +133,7 @@ fun GoldenMindApp() {
             }
         ) { padding ->
             when (selected) {
-                0 -> DashboardScreen(trading, { trading = !trading }, padding)
+                0 -> DashboardScreen(health, accounts, false, null, padding, {})
                 1 -> TradeScreen(padding)
                 2 -> RobotScreen(padding)
                 3 -> AccountsScreen(padding)
