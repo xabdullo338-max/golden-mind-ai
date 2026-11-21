@@ -30,6 +30,7 @@ class RiskEngine:
         cooldown_seconds: float = 0.0,
         max_consecutive_losses: int = 0,
         max_market_data_age_seconds: float = 2.0,
+        max_order_notional_usdt: float | None = None,
         clock: Any = time.monotonic,
     ):
         if not 0 < max_risk_per_trade_pct <= 100:
@@ -54,6 +55,8 @@ class RiskEngine:
             raise ValueError("max_consecutive_losses must be non-negative")
         if max_market_data_age_seconds <= 0:
             raise ValueError("max_market_data_age_seconds must be positive")
+        if max_order_notional_usdt is not None and max_order_notional_usdt <= 0:
+            raise ValueError("max_order_notional_usdt must be positive")
         self.max_risk_per_trade_pct = max_risk_per_trade_pct
         self.max_daily_loss_pct = max_daily_loss_pct
         self.max_open_positions = max_open_positions
@@ -65,6 +68,7 @@ class RiskEngine:
         self.cooldown_seconds = cooldown_seconds
         self.max_consecutive_losses = max_consecutive_losses
         self.max_market_data_age_seconds = max_market_data_age_seconds
+        self.max_order_notional_usdt = max_order_notional_usdt
         self._clock = clock
         self._last_order_at: dict[str, float] = {}
         self._consecutive_losses: dict[str, int] = {}
@@ -132,6 +136,8 @@ class RiskEngine:
         notional = order.quantity * price
         if notional > snapshot.equity * self.max_notional_pct / 100:
             return RiskDecision(False, "maximum position notional exceeded")
+        if self.max_order_notional_usdt is not None and notional > self.max_order_notional_usdt:
+            return RiskDecision(False, "absolute order notional cap exceeded")
 
         if order.side == OrderSide.BUY:
             if current_total_exposure + notional > snapshot.equity * self.max_total_exposure_pct / 100:
