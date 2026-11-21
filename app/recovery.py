@@ -6,6 +6,7 @@ from typing import Any
 
 from .position_engine import PositionEngine
 from .order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
+from .pending_orders import PendingOrderStore
 
 
 class RecoveryPhase(str, Enum):
@@ -29,13 +30,15 @@ class BrokerRecovery:
     """Rebuild runtime state from broker truth after restart/reconnect."""
 
     def __init__(self, accounts, portfolio_state, journal, positions: PositionEngine | None = None,
-                 lifecycle: OrderLifecycle | None = None):
+                 lifecycle: OrderLifecycle | None = None,
+                 pending_orders: PendingOrderStore | None = None):
         self.accounts = accounts
         self.portfolio_state = portfolio_state
         self.journal = journal
         self.positions = positions
         self.lifecycle = lifecycle
         self._phase: dict[str, RecoveryPhase] = {}
+        self.pending_orders = pending_orders
 
     def phase(self, account_id: str) -> RecoveryPhase:
         return self._phase.get(account_id, RecoveryPhase.IDLE)
@@ -60,6 +63,11 @@ class BrokerRecovery:
                     adapter.account.account_id,
                     adapter.account.broker,
                     open_orders,
+                )
+            if self.pending_orders is not None:
+                await self._reconcile_pending_orders(
+                    adapter.account.account_id,
+                    adapter,
                 )
 
             self.portfolio_state.reconcile(
@@ -187,6 +195,64 @@ class BrokerRecovery:
                 original_quantity=original,
             )
             self.lifecycle.recover_open_order(update)
+
+    async def _reconcile_pending_orders(self, account_id: str, adapter) -> None:
+        if self.pending_orders is None or self.lifecycle is None:
+            return
+        pending = self.pending_orders.list_account(account_id, adapter.account.broker)
+        for item in pending:
+            broker_order = await adapter.get_order_by_client_id(
+                item.symbol, item.client_order_id
+            )
+            if not broker_order:
+                # Do not delete the pending record when the broker cannot
+                # prove an outcome. The next recovery attempt must retry lookup.
+                continue
+
+            status_name = str(broker_order.get("status") or "UNKNOWN").upper()
+            try:
+                status = OrderStatus(status_name)
+            except ValueError:
+                status = OrderStatus.UNKNOWN
+
+            if status is OrderStatus.UNKNOWN:
+                continue
+
+            executed = float(
+                broker_order.get("executedQty", broker_order.get("executed_quantity", 0.0))
+                or 0.0
+            )
+            original = float(
+                broker_order.get("origQty", broker_order.get("original_quantity", item.quantity))
+                or item.quantity
+            )
+            price = broker_order.get("avgPrice", broker_order.get("average_price"))
+            avg_price = float(price) if price not in (None, "", 0, "0") else None
+
+            update = OrderUpdate(
+                broker=adapter.account.broker,
+                account_id=account_id,
+                client_order_id=item.client_order_id,
+                status=status,
+                symbol=item.symbol,
+                executed_quantity=executed,
+                average_price=avg_price,
+                broker_order_id=str(
+                    broker_order.get("orderId", broker_order.get("broker_order_id"))
+                ),
+                side=item.side,
+                original_quantity=original,
+            )
+            self.lifecycle.apply(update)
+            if status in {
+                OrderStatus.FILLED,
+                OrderStatus.CANCELED,
+                OrderStatus.REJECTED,
+                OrderStatus.EXPIRED,
+            }:
+                self.pending_orders.resolve(
+                    account_id, item.client_order_id, adapter.account.broker
+                )
 
     async def recover_all(self) -> list[RecoveryResult]:
         return [await self.recover_account(account_id) for account_id in self.accounts.accounts]
