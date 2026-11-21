@@ -21,8 +21,8 @@ execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
 positions = PositionEngine()
 market_data = MarketDataStore()
-emergency = EmergencySafetySystem(accounts, kill_switch, event_bus)
 event_bus = EventBus()
+emergency = EmergencySafetySystem(accounts, kill_switch, event_bus)
 journal = TradingJournal("data/golden_mind_ai.db")
 
 risk_engine = RiskEngine(
