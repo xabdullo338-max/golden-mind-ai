@@ -6,6 +6,7 @@ from .binance_events import execution_report_to_update
 from .execution_coordinator import ExecutionCoordinator
 from .portfolio_state import PortfolioStateManager
 from .recovery import BrokerRecovery
+from .kill_switch import EmergencySafetySystem
 
 
 class BinanceExecutionBridge:
@@ -17,21 +18,31 @@ class BinanceExecutionBridge:
         coordinator: ExecutionCoordinator,
         portfolio_state: PortfolioStateManager | None = None,
         recovery: BrokerRecovery | None = None,
+        emergency: EmergencySafetySystem | None = None,
     ):
         self.account_id = account_id
         self.coordinator = coordinator
         self.portfolio_state = portfolio_state
         self.recovery = recovery
+        self.emergency = emergency
 
     def mark_disconnected(self) -> None:
         if self.portfolio_state is not None:
             broker = "BINANCE"
             self.portfolio_state.mark_unconfirmed(self.account_id, broker)
+        if self.emergency is not None:
+            # Disconnect freezes the account until broker recovery succeeds.
+            import asyncio
+            asyncio.create_task(
+                self.emergency.freeze_account(self.account_id, "websocket disconnected")
+            )
 
     async def mark_reconnected_and_recover(self) -> bool:
         if self.recovery is None:
             return False
         result = await self.recovery.recover_account(self.account_id)
+        if result.confirmed and self.emergency is not None:
+            await self.emergency.recover_account(self.account_id)
         return result.confirmed
 
     async def handle(self, message: dict[str, Any]) -> None:
