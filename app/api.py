@@ -42,6 +42,7 @@ risk_engine = RiskEngine(
     max_total_exposure_pct=settings.max_total_exposure_pct,
     max_symbol_exposure_pct=settings.max_symbol_exposure_pct,
     max_market_data_age_seconds=settings.max_market_data_age_seconds,
+    max_order_notional_usdt=settings.live_max_order_notional_usdt if settings.live_trading_enabled else None,
     max_spread_pct=settings.scalping_max_spread_pct,
     cooldown_seconds=settings.risk_cooldown_seconds,
     max_consecutive_losses=settings.max_consecutive_losses,
