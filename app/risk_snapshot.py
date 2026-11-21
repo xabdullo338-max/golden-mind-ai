@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from .portfolio import AccountSnapshot
 from .portfolio_state import BrokerState
 from .daily_risk_state import DailyRiskStateStore
+from .position_engine import PositionEngine
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class RiskSnapshotProvider:
 
     daily_start_equity: dict[str, float] | None = None
     daily_risk_store: DailyRiskStateStore | None = None
+    positions: PositionEngine | None = None
 
     def exposures(
         self,
@@ -92,12 +94,28 @@ class RiskSnapshotProvider:
             return None
 
         open_positions = sum(1 for q in state.positions.values() if float(q) > 0)
+        realized_pnl = 0.0
+        unrealized_pnl = equity - cash
+
+        if self.positions is not None:
+            local_positions = self.positions.snapshot(state.account_id)
+            realized_pnl = sum(p.realized_pnl for p in local_positions)
+            unrealized_pnl = 0.0
+            for position in local_positions:
+                symbol = position.symbol.upper()
+                mark = prices.get(symbol)
+                if mark is None and symbol.endswith("USDT"):
+                    mark = prices.get(symbol.removesuffix("USDT"))
+                if mark is None or mark <= 0:
+                    return None
+                unrealized_pnl += position.unrealized_pnl(mark)
+
         return AccountSnapshot(
             account_id=state.account_id,
             equity=equity,
             cash=cash,
-            realized_pnl=0.0,
-            unrealized_pnl=equity - cash,
+            realized_pnl=realized_pnl,
+            unrealized_pnl=unrealized_pnl,
             daily_start_equity=start,
             open_positions=open_positions,
         )
