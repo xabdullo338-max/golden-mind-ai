@@ -93,6 +93,28 @@ class BinanceAdapter(BrokerAdapter):
         return [{"asset": a, "quantity": q} for a, q in balances.items()
                 if a not in {"USDT", "USDC", "BUSD"}]
 
+    async def get_candles(self, symbol: str, interval: str = "1m", limit: int = 100) -> list[dict[str, Any]]:
+        symbol = symbol.upper()
+        if self.account.mode == "PAPER":
+            return []
+        if not self.api_key:
+            return []
+        rows = await self._request(
+            "GET", "/api/v3/klines",
+            params={"symbol": symbol, "interval": interval, "limit": max(20, min(int(limit), 1000))},
+        )
+        return [
+            {
+                "timestamp": int(row[0]),
+                "open": float(row[1]),
+                "high": float(row[2]),
+                "low": float(row[3]),
+                "close": float(row[4]),
+                "volume": float(row[5]),
+            }
+            for row in rows
+        ]
+
     async def get_market_tick(self, symbol: str) -> MarketTick | None:
         symbol = symbol.upper()
         if self.account.mode == "PAPER":
