@@ -65,7 +65,7 @@ async def test_testnet_order_allowed_after_reconciliation():
 
 
 @pytest.mark.asyncio
-async def test_live_order_is_blocked_even_if_adapter_exists(monkeypatch):
+async def test_live_order_is_blocked_by_default_even_if_adapter_exists(monkeypatch):
     monkeypatch.setenv("GMAI_LIVE_TRADING", "true")
     manager = AccountManager()
     manager.register(FakeAdapter("LIVE"))
@@ -88,3 +88,55 @@ async def test_live_order_is_blocked_even_if_adapter_exists(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Live execution is not enabled"):
         await router.route("A", OrderRequest("live1", "BTCUSDT", OrderSide.BUY, 0.001))
+
+
+@pytest.mark.asyncio
+async def test_live_order_allowed_only_with_explicit_gate_flag(monkeypatch):
+    monkeypatch.setenv("GMAI_LIVE_TRADING", "true")
+    manager = AccountManager()
+    manager.register(FakeAdapter("LIVE"))
+    state = PortfolioStateManager()
+    state.reconcile("A", "TEST", {"USDT": 1000.0}, [])
+    gate = ExecutionGate(live_trading_enabled=True)
+    router = OrderRouter(
+        manager,
+        execution_gate=gate,
+        portfolio_state=state,
+        snapshot_provider=lambda account_id: AccountSnapshot(
+            account_id=account_id,
+            equity=1000.0,
+            cash=1000.0,
+            realized_pnl=0.0,
+            unrealized_pnl=0.0,
+            daily_start_equity=1000.0,
+            open_positions=0,
+        ),
+    )
+
+    result = await router.route("A", OrderRequest("live2", "BTCUSDT", OrderSide.BUY, 0.001))
+    assert result["status"] == "FILLED"
+
+
+@pytest.mark.asyncio
+async def test_live_order_remains_blocked_when_gate_flag_is_false():
+    manager = AccountManager()
+    manager.register(FakeAdapter("LIVE"))
+    state = PortfolioStateManager()
+    state.reconcile("A", "TEST", {"USDT": 1000.0}, [])
+    router = OrderRouter(
+        manager,
+        execution_gate=ExecutionGate(live_trading_enabled=False),
+        portfolio_state=state,
+        snapshot_provider=lambda account_id: AccountSnapshot(
+            account_id=account_id,
+            equity=1000.0,
+            cash=1000.0,
+            realized_pnl=0.0,
+            unrealized_pnl=0.0,
+            daily_start_equity=1000.0,
+            open_positions=0,
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Live execution is not enabled"):
+        await router.route("A", OrderRequest("live3", "BTCUSDT", OrderSide.BUY, 0.001))
