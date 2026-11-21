@@ -57,3 +57,31 @@ def test_valid_trade_passes():
     engine = RiskEngine(max_risk_per_trade_pct=1.0, max_notional_pct=50.0)
     d = engine.check(order(qty=0.25), snapshot(), current_price=100.0, stop_price=96.0)
     assert d.allowed
+
+
+def test_stale_market_data_blocks():
+    engine = RiskEngine(max_market_data_age_seconds=2.0)
+    d = engine.check(order(), snapshot(), current_price=100.0, market_data_age_seconds=2.1)
+    assert not d.allowed
+    assert "stale" in d.reason
+
+
+def test_total_and_symbol_exposure_limits():
+    engine = RiskEngine(max_total_exposure_pct=50.0, max_symbol_exposure_pct=20.0)
+    assert not engine.check(order(qty=2.0), snapshot(), current_price=100.0, current_total_exposure=400.0).allowed
+    assert not engine.check(order(qty=2.0), snapshot(), current_price=100.0, current_symbol_exposure=150.0).allowed
+
+
+def test_consecutive_loss_limit():
+    engine = RiskEngine(max_consecutive_losses=2)
+    engine.record_trade_result("A", -5.0)
+    engine.record_trade_result("A", -2.0)
+    d = engine.check(order(), snapshot(), current_price=100.0)
+    assert not d.allowed
+    assert "consecutive" in d.reason
+
+
+def test_position_size_is_risk_bounded():
+    engine = RiskEngine(max_risk_per_trade_pct=1.0, max_notional_pct=50.0)
+    qty = engine.position_size(equity=1000.0, entry_price=100.0, stop_price=95.0)
+    assert qty == pytest.approx(2.0)
