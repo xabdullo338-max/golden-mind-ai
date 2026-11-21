@@ -41,6 +41,7 @@ def build_binance_runtime(
     portfolio_state: PortfolioStateManager,
     event_bus: EventBus,
     journal: TradingJournal,
+    positions: PositionEngine | None = None,
 ) -> BinanceRuntime:
     mode = settings.trading_mode.upper()
     if mode not in {"PAPER", "TESTNET", "DEMO", "LIVE"}:
@@ -64,7 +65,7 @@ def build_binance_runtime(
         lifecycle,
         journal,
         event_bus,
-        positions=PositionEngine(),
+        positions=positions or PositionEngine(),
         execution_ledger=ExecutionLedger("data/golden_mind_execution.db"),
     )
     recovery = BrokerRecovery(accounts, portfolio_state, journal,
