@@ -38,6 +38,16 @@ def test_cumulative_execution_only_applies_new_fill():
     assert ledger.delta("o-1", 1.0, "A", "BINANCE") == pytest.approx(0.6)
 
 
+def test_execution_ledger_survives_process_restart(tmp_path):
+    path = str(tmp_path / "execution.db")
+    first = ExecutionLedger(path)
+    assert first.delta("o-1", 0.4, "A", "BINANCE") == 0.4
+
+    restarted = ExecutionLedger(path)
+    assert restarted.delta("o-1", 0.4, "A", "BINANCE") == 0.0
+    assert restarted.delta("o-1", 1.0, "A", "BINANCE") == pytest.approx(0.6)
+
+
 def test_cumulative_execution_cannot_move_backwards():
     ledger = ExecutionLedger()
     ledger.delta("o-1", 1.0, "A", "BINANCE")
