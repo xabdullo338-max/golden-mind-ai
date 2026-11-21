@@ -7,22 +7,16 @@ from pathlib import Path
 
 @dataclass
 class ExecutionLedger:
-    """Durable cumulative execution ledger.
-
-    The broker's cumulative executed quantity is persisted so a process restart
-    or websocket reconnect cannot cause an already-applied fill to be applied
-    to positions a second time.
-    """
+    """Cumulative execution ledger with optional durable persistence."""
 
     path: str = ":memory:"
 
     def __post_init__(self):
-        self._db = sqlite3.connect(self.path)
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-            self._db.close()
-            self._db = None
+        self._db = sqlite3.connect(self.path) if self.path == ":memory:" else None
         db = self._connect()
+        try:
+            if self.path != ":memory:":
+                Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS executions (
@@ -37,23 +31,16 @@ class ExecutionLedger:
             db.commit()
         finally:
             self._close(db)
-        if self.path == ":memory:":
-            return
-        db.close()
 
     def _connect(self):
         return self._db if self._db is not None else sqlite3.connect(self.path)
 
     def _close(self, db):
-        if self.path != ":memory:" and db is not self._db:
+        if self._db is None:
             db.close()
 
     def _key(self, order_id: str, account_id: str | None, broker: str | None):
-        return (
-            (broker or "").upper(),
-            account_id or "",
-            order_id,
-        )
+        return (broker or "").upper(), account_id or "", order_id
 
     def delta(
         self,
@@ -65,8 +52,9 @@ class ExecutionLedger:
         if cumulative_executed < 0:
             raise ValueError("cumulative_executed cannot be negative")
 
-        broker_key, account_key, order_key = self._key(order_id, account_id, broker)
-
+        broker_key, account_key, order_key = self._key(
+            order_id, account_id, broker
+        )
         db = self._connect()
         try:
             row = db.execute(
@@ -112,7 +100,9 @@ class ExecutionLedger:
         account_id: str | None = None,
         broker: str | None = None,
     ) -> None:
-        broker_key, account_key, order_key = self._key(order_id, account_id, broker)
+        broker_key, account_key, order_key = self._key(
+            order_id, account_id, broker
+        )
         db = self._connect()
         try:
             db.execute(
@@ -123,3 +113,5 @@ class ExecutionLedger:
                 (broker_key, account_key, order_key),
             )
             db.commit()
+        finally:
+            self._close(db)
