@@ -13,6 +13,7 @@ from .portfolio_state import PortfolioStateManager
 from .risk_engine import RiskEngine
 from .risk_snapshot import RiskSnapshotProvider
 from .position_engine import PositionEngine
+from .pending_orders import PendingOrderStore
 
 settings = Settings()
 accounts = AccountManager()
@@ -21,6 +22,7 @@ execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
 positions = PositionEngine()
 market_data = MarketDataStore()
+pending_orders = PendingOrderStore()
 event_bus = EventBus()
 emergency = EmergencySafetySystem(accounts, kill_switch, event_bus)
 journal = TradingJournal("data/golden_mind_ai.db")
@@ -58,4 +60,5 @@ order_router = OrderRouter(
     market_tick_provider=_market_tick,
     market_data_store=market_data,
     emergency=emergency,
+    pending_orders=pending_orders,
 )
