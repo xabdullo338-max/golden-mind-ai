@@ -6,7 +6,7 @@ from .daily_risk_state import DailyRiskStateStore
 from .event_bus import EventBus
 from .execution_gate import ExecutionGate
 from .journal import TradingJournal
-from .kill_switch import KillSwitch
+from .kill_switch import KillSwitch, EmergencySafetySystem
 from .market_data_store import MarketDataStore
 from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
@@ -21,6 +21,7 @@ execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
 positions = PositionEngine()
 market_data = MarketDataStore()
+emergency = EmergencySafetySystem(accounts, kill_switch, event_bus)
 event_bus = EventBus()
 journal = TradingJournal("data/golden_mind_ai.db")
 
@@ -56,4 +57,5 @@ order_router = OrderRouter(
     risk_snapshot_provider=risk_snapshot_provider,
     market_tick_provider=_market_tick,
     market_data_store=market_data,
+    emergency=emergency,
 )
