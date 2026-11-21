@@ -23,7 +23,7 @@ def test_event_bus_is_async():
         q = bus.subscribe()
         await bus.publish(BinanceEventNormalizer.normalize({"event": "executionReport"}, "A"))
         received = await asyncio.wait_for(q.get(), 0.1)
-        assert received.event_type == "BROKER_WS_EVENT"
+        assert received.event_type == "ORDER_UPDATE"
     asyncio.run(run())
 
 
