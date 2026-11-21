@@ -3,13 +3,12 @@ package ai.goldenmind
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : android.app.Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private var token: String? = null
     private lateinit var baseUrl: EditText
