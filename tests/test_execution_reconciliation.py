@@ -9,7 +9,7 @@ from app.order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
 from app.position_engine import PositionEngine
 
 
-def make_update(status, cumulative, side="BUY", client="order-1", price=100.0):
+def make_update(status, cumulative, side="BUY", client="order-1", price=100.0, last_qty=None, last_price=None):
     return OrderUpdate(
         broker="BINANCE",
         account_id="A",
@@ -20,6 +20,8 @@ def make_update(status, cumulative, side="BUY", client="order-1", price=100.0):
         average_price=price if cumulative else None,
         broker_order_id="42",
         side=side,
+        last_fill_quantity=last_qty,
+        last_fill_price=last_price,
     )
 
 
@@ -98,12 +100,12 @@ async def test_coordinator_applies_only_incremental_quantity():
     )
     await coordinator.submitted("A", "BINANCE", "o-1", "BTCUSDT", "BUY", 1.0)
 
-    await coordinator.broker_update(make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0))
-    await coordinator.broker_update(make_update(OrderStatus.FILLED, 1.0, price=101.0))
+    await coordinator.broker_update(make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0, last_qty=0.4, last_price=100.0))
+    await coordinator.broker_update(make_update(OrderStatus.FILLED, 1.0, price=101.0, last_qty=0.6, last_price=101.6666666667))
 
     position = coordinator.positions.get("A", "BTCUSDT")
     assert position.quantity == pytest.approx(1.0)
-    assert position.average_entry == pytest.approx(100.5)
+    assert position.average_entry == pytest.approx(101.0)
 
 
 @pytest.mark.asyncio
