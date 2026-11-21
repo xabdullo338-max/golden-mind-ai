@@ -46,6 +46,10 @@ class BrokerAdapter(ABC):
         """Return recent account trades; adapters may override when supported."""
         return []
 
+    async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:
+        """Return broker truth for an order identified by client order ID."""
+        return None
+
     @abstractmethod
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs) -> dict[str, Any]: ...
