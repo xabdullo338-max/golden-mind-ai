@@ -147,11 +147,11 @@ async def test_order(payload: OrderIn, _: dict = Depends(require_scope("trade"))
 
 @app.post("/kill-switch/stop")
 async def stop(_: dict = Depends(require_scope("admin"))):
-    await kill_switch.stop()
+    kill_switch.stop_all()
     return {"status": "stopped"}
 
 
 @app.post("/kill-switch/reset")
 async def reset(_: dict = Depends(require_scope("admin"))):
-    kill_switch.reset()
+    kill_switch.resume()
     return {"status": "reset"}
