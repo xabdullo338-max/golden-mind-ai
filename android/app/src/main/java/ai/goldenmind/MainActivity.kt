@@ -118,18 +118,28 @@ class MainActivity : AppCompatActivity() {
                 conn.requestMethod = "POST"
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                val body = "username=\${java.net.URLEncoder.encode(username, "UTF-8")}&password=\${java.net.URLEncoder.encode(password, "UTF-8")}"
+
+                val encodedUsername = java.net.URLEncoder.encode(username, "UTF-8")
+                val encodedPassword = java.net.URLEncoder.encode(password, "UTF-8")
+                val body = "username=" + encodedUsername + "&password=" + encodedPassword
+
                 conn.outputStream.use { it.write(body.toByteArray()) }
                 val code = conn.responseCode
-                val response = (if (code in 200..299) conn.inputStream else conn.errorStream).bufferedReader().readText()
-                if (code !in 200..299) throw RuntimeException("HTTP $code: $response")
+                val response = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                    .bufferedReader().readText()
+
+                if (code !in 200..299) {
+                    throw RuntimeException("HTTP $code: $response")
+                }
+
                 val access = Regex("""\"access_token\"\s*:\s*\"([^\"]+)\"""")
                     .find(response)?.groupValues?.get(1)
                     ?: throw RuntimeException("Token missing")
+
                 token = access
                 runOnUiThread { showDashboard(api) }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "Sign-in failed: \${e.message}" }
+                runOnUiThread { status.text = "Sign-in failed: " + e.message }
             }
         }
     }
@@ -141,17 +151,17 @@ class MainActivity : AppCompatActivity() {
                 val health = get(api.trimEnd('/') + "/health")
                 val accounts = get(api.trimEnd('/') + "/accounts")
                 runOnUiThread {
-                    status.text = "API: ONLINE\n$health"
+                    status.text = "API: ONLINE\n" + health
                     content.removeAllViews()
                     val a = TextView(this).apply {
-                        text = "Accounts\n$accounts"
+                        text = "Accounts\n" + accounts
                         setTextColor(android.graphics.Color.WHITE)
                         textSize = 15f
                     }
                     content.addView(a, lp())
                 }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "API error: \${e.message}" }
+                runOnUiThread { status.text = "API error: " + e.message }
             }
         }
     }
@@ -159,7 +169,7 @@ class MainActivity : AppCompatActivity() {
     private fun get(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
-        token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        token?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val body = stream.bufferedReader().readText()
