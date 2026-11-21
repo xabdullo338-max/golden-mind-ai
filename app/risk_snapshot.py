@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .portfolio import AccountSnapshot
 from .portfolio_state import BrokerState
+from .daily_risk_state import DailyRiskStateStore
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class RiskSnapshotProvider:
     """
 
     daily_start_equity: dict[str, float] | None = None
+    daily_risk_store: DailyRiskStateStore | None = None
 
     def exposures(
         self,
@@ -75,7 +77,17 @@ class RiskSnapshotProvider:
                 return None
             equity += quantity * price
 
-        start = (self.daily_start_equity or {}).get(state.account_id, equity)
+        if self.daily_risk_store is not None:
+            from .portfolio import utc_date
+            daily_state = self.daily_risk_store.establish_if_missing(
+                state.account_id, utc_date(), equity
+            )
+            start = daily_state.start_equity
+        else:
+            start = (self.daily_start_equity or {}).get(state.account_id)
+            if start is None:
+                return None
+
         if start <= 0:
             return None
 
