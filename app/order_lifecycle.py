@@ -24,10 +24,16 @@ class OrderUpdate:
     average_price: float | None = None
     broker_order_id: str | None = None
     side: str | None = None
+    last_fill_quantity: float | None = None
+    last_fill_price: float | None = None
 
     def __post_init__(self):
         if self.executed_quantity < 0:
             raise ValueError("executed_quantity cannot be negative")
+        if self.last_fill_quantity is not None and self.last_fill_quantity < 0:
+            raise ValueError("last_fill_quantity cannot be negative")
+        if self.last_fill_price is not None and self.last_fill_price <= 0:
+            raise ValueError("last_fill_price must be positive")
 
 class OrderLifecycle:
     """Tracks monotonic broker order state without assuming broker-specific payloads."""
