@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .position_engine import PositionEngine
+from .order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
 
 
 @dataclass(frozen=True)
@@ -19,11 +20,13 @@ class RecoveryResult:
 class BrokerRecovery:
     """Rebuild runtime state from broker truth after restart/reconnect."""
 
-    def __init__(self, accounts, portfolio_state, journal, positions: PositionEngine | None = None):
+    def __init__(self, accounts, portfolio_state, journal, positions: PositionEngine | None = None,
+                 lifecycle: OrderLifecycle | None = None):
         self.accounts = accounts
         self.portfolio_state = portfolio_state
         self.journal = journal
         self.positions = positions
+        self.lifecycle = lifecycle
 
     async def recover_account(self, account_id: str) -> RecoveryResult:
         managed = self.accounts.accounts.get(account_id)
@@ -41,6 +44,8 @@ class BrokerRecovery:
             # cannot fully explain the broker-held quantity.
             if self.positions is not None:
                 await self._hydrate_positions(adapter, positions)
+            if self.lifecycle is not None:
+                self._hydrate_open_orders(adapter.account.account_id, adapter.account.broker, open_orders)
 
             self.portfolio_state.reconcile(
                 account_id=account_id,
@@ -134,6 +139,41 @@ class BrokerRecovery:
             # Broker reports no open base-asset positions, so stale local
             # positions can safely be removed.
             self.positions.clear_account(adapter.account.account_id)
+
+    def _hydrate_open_orders(self, account_id: str, broker: str, open_orders: list[dict[str, Any]]) -> None:
+        for order in open_orders:
+            client_order_id = str(order.get("clientOrderId") or "").strip()
+            symbol = str(order.get("symbol") or "").upper().strip()
+            side = str(order.get("side") or "").upper().strip()
+            status_name = str(order.get("status") or "NEW").upper().strip()
+            if not client_order_id or not symbol or side not in {"BUY", "SELL"}:
+                continue
+            try:
+                status = OrderStatus(status_name)
+            except ValueError:
+                status = OrderStatus.UNKNOWN
+            if status not in {OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED}:
+                continue
+            executed = float(order.get("executedQty", order.get("executed_quantity", 0.0)) or 0.0)
+            original = float(order.get("origQty", order.get("original_quantity", 0.0)) or 0.0)
+            if original <= 0 or executed < 0 or executed > original + 1e-10:
+                continue
+            avg = order.get("price")
+            avg_price = float(avg) if avg not in (None, "", 0, "0") else None
+            broker_order_id = order.get("orderId", order.get("broker_order_id"))
+            update = OrderUpdate(
+                broker=broker,
+                account_id=account_id,
+                client_order_id=client_order_id,
+                status=status,
+                symbol=symbol,
+                executed_quantity=executed,
+                average_price=avg_price,
+                broker_order_id=str(broker_order_id) if broker_order_id is not None else None,
+                side=side,
+                original_quantity=original,
+            )
+            self.lifecycle.recover_open_order(update)
 
     async def recover_all(self) -> list[RecoveryResult]:
         return [
