@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -132,9 +133,10 @@ class MainActivity : AppCompatActivity() {
                     throw RuntimeException("HTTP $code: $response")
                 }
 
-                val access = Regex("""\"access_token\"\s*:\s*\"([^\"]+)\"""")
-                    .find(response)?.groupValues?.get(1)
-                    ?: throw RuntimeException("Token missing")
+                val access = JSONObject(response).optString("access_token")
+                if (access.isBlank()) {
+                    throw RuntimeException("Token missing")
+                }
 
                 token = access
                 runOnUiThread { showDashboard(api) }
