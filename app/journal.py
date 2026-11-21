@@ -119,14 +119,21 @@ class TradingJournal:
         account_id: str | None = None,
         broker: str | None = None,
     ) -> dict[str, Any] | None:
-        if not account_id or not broker:
-            raise ValueError("account_id and broker are required for get_order")
         with self._connect() as db:
             db.row_factory = sqlite3.Row
-            row = db.execute(
-                "SELECT * FROM orders WHERE client_order_id=? AND account_id=? AND broker=?",
-                (client_order_id, account_id, broker),
-            ).fetchone()
+            if account_id and broker:
+                row = db.execute(
+                    "SELECT * FROM orders WHERE client_order_id=? AND account_id=? AND broker=?",
+                    (client_order_id, account_id, broker),
+                ).fetchone()
+            else:
+                rows = db.execute(
+                    "SELECT * FROM orders WHERE client_order_id=? LIMIT 2",
+                    (client_order_id,),
+                ).fetchall()
+                if len(rows) > 1:
+                    raise ValueError("account_id and broker are required when client_order_id is not unique")
+                row = rows[0] if rows else None
             return dict(row) if row else None
 
     def list_open_orders(self) -> list[dict[str, Any]]:
