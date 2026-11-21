@@ -47,7 +47,8 @@ risk_engine = RiskEngine(
     max_symbol_exposure_pct=settings.max_symbol_exposure_pct,
     max_market_data_age_seconds=settings.max_market_data_age_seconds,
     max_spread_pct=settings.scalping_max_spread_pct,
-    cooldown_seconds=settings.scalping_cooldown_seconds if settings.scalping_enabled else 0.0,
+    cooldown_seconds=settings.risk_cooldown_seconds,
+    max_consecutive_losses=settings.max_consecutive_losses,
 )
 risk_snapshot_provider = RiskSnapshotProvider()
 binance_runtime = None
