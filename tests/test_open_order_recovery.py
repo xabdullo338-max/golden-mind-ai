@@ -138,4 +138,4 @@ async def test_partial_open_order_recovers_remaining_quantity():
     assert order.status == OrderStatus.PARTIALLY_FILLED
     assert order.original_quantity == pytest.approx(2.0)
     assert order.executed_quantity == pytest.approx(0.75)
-    assert order.original_quantity - order.executed_quantity == pytest.approx(1.25)
+    assert order.remaining_quantity == pytest.approx(1.25)
