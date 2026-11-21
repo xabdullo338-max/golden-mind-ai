@@ -17,6 +17,8 @@ from .kill_switch import KillSwitch
 from .order_models import OrderRequest, OrderSide, OrderType
 from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
+from .risk_engine import RiskEngine
+from .risk_snapshot import RiskSnapshotProvider
 from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
 from .ws import install_websocket_routes
 
@@ -32,9 +34,34 @@ order_router = OrderRouter(
     kill_switch=kill_switch,
     execution_gate=execution_gate,
     portfolio_state=portfolio_state,
+    risk_engine=risk_engine,
+    risk_snapshot_provider=risk_snapshot_provider,
+    market_tick_provider=_market_tick,
 )
 journal = TradingJournal("data/golden_mind_ai.db")
+risk_engine = RiskEngine(
+    max_risk_per_trade_pct=settings.max_risk_per_trade_pct,
+    max_daily_loss_pct=settings.max_daily_loss_pct,
+    max_open_positions=settings.max_open_positions,
+    max_total_exposure_pct=settings.max_total_exposure_pct,
+    max_symbol_exposure_pct=settings.max_symbol_exposure_pct,
+    max_market_data_age_seconds=settings.max_market_data_age_seconds,
+    max_spread_pct=settings.scalping_max_spread_pct,
+    cooldown_seconds=settings.scalping_cooldown_seconds if settings.scalping_enabled else 0.0,
+)
+risk_snapshot_provider = RiskSnapshotProvider()
 binance_runtime = None
+
+async def _market_tick(account_id: str, symbol: str):
+    managed = accounts.accounts.get(account_id)
+    if managed is None:
+        return None
+    return await managed.adapter.get_market_tick(symbol)
+
+
+def _risk_snapshot(account_id: str):
+    state = portfolio_state.get(account_id)
+    return risk_snapshot_provider.build(state, prices={}) if state else None
 
 
 @asynccontextmanager
