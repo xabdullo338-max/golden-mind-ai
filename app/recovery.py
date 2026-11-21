@@ -73,6 +73,11 @@ class BrokerRecovery:
 
     async def _hydrate_positions(self, adapter, positions: list[dict[str, Any]]) -> None:
         reconstructed: dict[str, tuple[float, float, float]] = {}
+        expected_symbols = {
+            str(p.get("asset", "")).upper()
+            for p in positions
+            if str(p.get("asset", "")).strip() and float(p.get("quantity", 0.0)) > 0
+        }
         for position in positions:
             asset = str(position.get("asset", "")).upper()
             broker_qty = float(position.get("quantity", 0.0))
@@ -121,10 +126,14 @@ class BrokerRecovery:
 
         # Only replace the local snapshot when broker history fully reconciles.
         # Incomplete history must not fabricate an entry price.
-        if reconstructed:
+        if reconstructed and len(reconstructed) == len(expected_symbols):
             self.positions.clear_account(adapter.account.account_id)
             for symbol, (qty, avg, realized) in reconstructed.items():
                 self.positions.hydrate(adapter.account.account_id, symbol, qty, avg, realized)
+        elif not expected_symbols:
+            # Broker reports no open base-asset positions, so stale local
+            # positions can safely be removed.
+            self.positions.clear_account(adapter.account.account_id)
 
     async def recover_all(self) -> list[RecoveryResult]:
         return [
