@@ -70,6 +70,22 @@ class PositionEngine:
         position.apply_fill(side, quantity, price, commission)
         return position
 
+    def hydrate(self, account_id: str, symbol: str, quantity: float,
+                average_entry: float, realized_pnl: float = 0.0) -> Position:
+        """Replace one position from broker-reconciled historical truth."""
+        if quantity < 0 or average_entry < 0:
+            raise ValueError("invalid hydrated position")
+        position = self.get(account_id, symbol)
+        position.quantity = quantity
+        position.average_entry = average_entry if quantity > 0 else 0.0
+        position.realized_pnl = realized_pnl
+        return position
+
+    def clear_account(self, account_id: str) -> None:
+        for key in list(self._positions):
+            if key[0] == account_id:
+                del self._positions[key]
+
     def snapshot(self, account_id: str) -> list[Position]:
         return [
             p for (aid, _), p in self._positions.items()
