@@ -8,6 +8,8 @@ from typing import Any
 from urllib.parse import urlencode
 import httpx
 from .base import BrokerAdapter, BrokerAccount
+from ..market_data import MarketTick
+from datetime import datetime, timezone
 
 class BinanceAPIError(RuntimeError):
     pass
@@ -90,6 +92,33 @@ class BinanceAdapter(BrokerAdapter):
         balances = await self.get_balance()
         return [{"asset": a, "quantity": q} for a, q in balances.items()
                 if a not in {"USDT", "USDC", "BUSD"}]
+
+    async def get_market_tick(self, symbol: str) -> MarketTick | None:
+        symbol = symbol.upper()
+        if self.account.mode == "PAPER":
+            meta = next(
+                (o.get("metadata", {}) for o in self._paper_orders.values()
+                 if str(o.get("symbol", "")).upper() == symbol),
+                {},
+            )
+            price = float(meta.get("price") or 0)
+            if price <= 0:
+                return None
+            return MarketTick("BINANCE", symbol, price, datetime.now(timezone.utc))
+        if not self.api_key:
+            return None
+        data = await self._request(
+            "GET", "/api/v3/ticker/24hr", params={"symbol": symbol}
+        )
+        return MarketTick(
+            "BINANCE",
+            symbol,
+            float(data["lastPrice"]),
+            datetime.now(timezone.utc),
+            bid=float(data["bidPrice"]),
+            ask=float(data["askPrice"]),
+            volume=float(data["volume"]),
+        )
 
     async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
