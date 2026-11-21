@@ -60,7 +60,7 @@ def build_binance_runtime(
         journal,
         event_bus,
         positions=PositionEngine(),
-        execution_ledger=ExecutionLedger(),
+        execution_ledger=ExecutionLedger("data/golden_mind_execution.db"),
     )
     recovery = BrokerRecovery(accounts, portfolio_state, journal)
     bridge = BinanceExecutionBridge(
