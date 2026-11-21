@@ -82,6 +82,7 @@ def build_binance_runtime(
         lifecycle=lifecycle,
         pending_orders=pending_orders,
         emergency=emergency,
+        execution_coordinator=coordinator,
     )
     bridge = BinanceExecutionBridge(
         settings.binance_account_id,
