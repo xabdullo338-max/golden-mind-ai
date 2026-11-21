@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
@@ -19,6 +20,9 @@ from .risk_engine import RiskEngine
 from .risk_snapshot import RiskSnapshotProvider
 from .position_engine import PositionEngine
 from .pending_orders import PendingOrderStore
+from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
+from .live_strategy import LiveStrategyRunner
+from .strategy_engine import TrendMomentumStrategy
 
 settings = Settings()
 accounts = AccountManager()
@@ -74,7 +78,44 @@ order_router = OrderRouter(
     pending_orders=pending_orders,
 )
 
-app = FastAPI(title="Golden Mind AI", version="1.0.0")
+runtime = None
+strategy_task = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global runtime, strategy_task
+    if settings.trading_mode.upper() == "LIVE":
+        runtime = build_binance_runtime(
+            settings, accounts, portfolio_state, event_bus, journal,
+            positions=positions, market_data=market_data,
+            emergency=emergency, pending_orders=pending_orders,
+        )
+        await start_binance_runtime(runtime)
+        if settings.live_trading_enabled and runtime.adapter.account.mode == "LIVE":
+            import asyncio
+            runner = LiveStrategyRunner(
+                settings=settings,
+                accounts=accounts,
+                router=order_router,
+                portfolio_state=portfolio_state,
+                risk_engine=risk_engine,
+                market_data=market_data,
+                strategy=TrendMomentumStrategy(),
+            )
+            strategy_task = asyncio.create_task(runner.run_forever())
+    yield
+    if strategy_task is not None:
+        strategy_task.cancel()
+        try:
+            await strategy_task
+        except asyncio.CancelledError:
+            pass
+    if runtime is not None:
+        await stop_binance_runtime(runtime)
+
+
+app = FastAPI(title="Golden Mind AI", version="1.0.0", lifespan=lifespan)
 
 
 class OrderIn(BaseModel):
