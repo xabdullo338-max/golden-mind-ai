@@ -123,9 +123,9 @@ class OrderRouter:
                 account_enabled=managed.enabled,
                 state_confirmed=confirmed,
                 daily_loss_ok=self._daily_loss_ok(account_id, live=live),
-                # LIVE remains explicitly disabled until a separate,
-                # authenticated live-trading enablement mechanism is added.
-                live_enabled=not live,
+                # TESTNET/DEMO/PAPER are allowed by the normal gate. LIVE
+                # additionally requires the explicit server-side feature flag.
+                live_enabled=(not live) or self.execution_gate.live_trading_enabled,
             )
 
         if self.risk_engine is not None:
