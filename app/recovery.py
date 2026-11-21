@@ -33,7 +33,8 @@ class BrokerRecovery:
     def __init__(self, accounts, portfolio_state, journal, positions: PositionEngine | None = None,
                  lifecycle: OrderLifecycle | None = None,
                  pending_orders: PendingOrderStore | None = None,
-                 emergency: EmergencySafetySystem | None = None):
+                 emergency: EmergencySafetySystem | None = None,
+                 execution_coordinator: Any | None = None):
         self.accounts = accounts
         self.portfolio_state = portfolio_state
         self.journal = journal
@@ -42,6 +43,7 @@ class BrokerRecovery:
         self._phase: dict[str, RecoveryPhase] = {}
         self.pending_orders = pending_orders
         self.emergency = emergency
+        self.execution_coordinator = execution_coordinator
 
     def phase(self, account_id: str) -> RecoveryPhase:
         return self._phase.get(account_id, RecoveryPhase.IDLE)
@@ -250,7 +252,10 @@ class BrokerRecovery:
                 side=item.side,
                 original_quantity=original,
             )
-            self.lifecycle.apply(update)
+            if self.execution_coordinator is not None:
+                await self.execution_coordinator.broker_update(update)
+            else:
+                self.lifecycle.apply(update)
             if status in {
                 OrderStatus.FILLED,
                 OrderStatus.CANCELED,
