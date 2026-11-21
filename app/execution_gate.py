@@ -6,6 +6,7 @@ from dataclasses import dataclass
 class ExecutionGate:
     """Blocks new orders until broker state is confirmed and risk gates pass."""
     global_enabled: bool = True
+    live_trading_enabled: bool = False
 
     def assert_ready(self, *, account_enabled: bool, state_confirmed: bool,
                      daily_loss_ok: bool, live_enabled: bool) -> None:
