@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     max_risk_per_trade_pct: float = Field(default=0.25, gt=0, le=2.0)
     max_daily_loss_pct: float = Field(default=3.0, gt=0, le=10.0)
     max_open_positions: int = Field(default=3, ge=1, le=20)
+    max_total_exposure_pct: float = Field(default=100.0, gt=0, le=1000)
+    max_symbol_exposure_pct: float = Field(default=100.0, gt=0, le=1000)
+    max_consecutive_losses: int = Field(default=0, ge=0, le=100)
 
     allowed_symbols: str = "BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT"
 
@@ -22,6 +25,7 @@ class Settings(BaseSettings):
     scalping_max_spread_pct: float = Field(default=0.08, gt=0, le=5)
     scalping_min_move_pct: float = Field(default=0.03, gt=0, le=10)
     max_market_data_age_seconds: float = Field(default=2.0, gt=0, le=60)
+    risk_cooldown_seconds: float = Field(default=0.0, ge=0, le=60)
 
     # Safe runtime bootstrap. LIVE is never enabled by configuration alone.
     auto_register_accounts: bool = True
