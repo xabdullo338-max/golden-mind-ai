@@ -1,5 +1,6 @@
 import pytest
 
+from app.portfolio import AccountSnapshot
 from app.account_manager import AccountManager
 from app.brokers.base import BrokerAccount, BrokerAdapter
 from app.execution_gate import ExecutionGate
@@ -70,7 +71,20 @@ async def test_live_order_is_blocked_even_if_adapter_exists(monkeypatch):
     manager.register(FakeAdapter("LIVE"))
     state = PortfolioStateManager()
     state.reconcile("A", "TEST", {"USDT": 1000.0}, [])
-    router = OrderRouter(manager, execution_gate=ExecutionGate(), portfolio_state=state)
+    router = OrderRouter(
+        manager,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+        snapshot_provider=lambda account_id: AccountSnapshot(
+            account_id=account_id,
+            equity=1000.0,
+            cash=1000.0,
+            realized_pnl=0.0,
+            unrealized_pnl=0.0,
+            daily_start_equity=1000.0,
+            open_positions=0,
+        ),
+    )
 
     with pytest.raises(RuntimeError, match="Live execution is not enabled"):
         await router.route("A", OrderRequest("live1", "BTCUSDT", OrderSide.BUY, 0.001))
