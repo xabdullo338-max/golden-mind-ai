@@ -7,6 +7,11 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     trading_mode: str = "PAPER"
+    # Explicit server-side feature flag. LIVE stays OFF unless deliberately enabled.
+    live_trading_enabled: bool = False
+    # Independent hard ceilings for LIVE, tighter than normal risk settings.
+    live_max_order_notional_usdt: float = Field(default=20.0, gt=0, le=1000)
+    live_max_daily_loss_pct: float = Field(default=1.0, gt=0, le=5.0)
 
     initial_balance_usdt: float = Field(default=300.0, gt=0)
     max_risk_per_trade_pct: float = Field(default=0.25, gt=0, le=2.0)
