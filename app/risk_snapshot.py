@@ -42,17 +42,12 @@ class RiskSnapshotProvider:
                     return None
                 equity += quantity * price
 
-        for position in state.positions.values():
-            quantity = float(position)
-            if quantity <= 0:
+        for asset, quantity in state.positions.items():
+            quantity = float(quantity)
+            asset = str(asset).upper()
+            if quantity <= 0 or asset in state.balances:
                 continue
-            asset = next(
-                (a for a, q in state.positions.items() if q == position),
-                None,
-            )
-            if asset is None or asset.upper() in state.balances:
-                continue
-            price = prices.get(asset.upper()) or prices.get(f"{asset.upper()}USDT")
+            price = prices.get(asset) or prices.get(f"{asset}USDT")
             if price is None or price <= 0:
                 return None
             equity += quantity * price
