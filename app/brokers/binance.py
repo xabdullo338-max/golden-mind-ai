@@ -120,7 +120,14 @@ class BinanceAdapter(BrokerAdapter):
             volume=float(data["volume"]),
         )
 
-    async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:\n        if self.account.mode == "PAPER":\n            return self._paper_orders.get(client_order_id)\n        if not self._execution_allowed():\n            raise BinanceAPIError("Execution is disabled for this account mode")\n        return await self._request("GET", "/api/v3/order", signed=True, params={"symbol": symbol.upper(), "origClientOrderId": client_order_id})\n\n    async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
+    async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:
+        if self.account.mode == "PAPER":
+            return self._paper_orders.get(client_order_id)
+        if not self._execution_allowed():
+            raise BinanceAPIError("Execution is disabled for this account mode")
+        return await self._request("GET", "/api/v3/order", signed=True, params={"symbol": symbol.upper(), "origClientOrderId": client_order_id})
+
+    async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
             return [
                 {"symbol": order.get("symbol", symbol), "side": order.get("side"),
