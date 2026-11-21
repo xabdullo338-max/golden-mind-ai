@@ -20,6 +20,7 @@ from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
 from .risk_engine import RiskEngine
 from .risk_snapshot import RiskSnapshotProvider
+from .position_engine import PositionEngine
 from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
 from .ws import install_websocket_routes
 
@@ -29,6 +30,7 @@ accounts = AccountManager()
 kill_switch = KillSwitch()
 execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
+positions = PositionEngine()
 event_bus = EventBus()
 journal = TradingJournal("data/golden_mind_ai.db")
 risk_engine = RiskEngine(
@@ -42,7 +44,7 @@ risk_engine = RiskEngine(
     cooldown_seconds=settings.risk_cooldown_seconds,
     max_consecutive_losses=settings.max_consecutive_losses,
 )
-risk_snapshot_provider = RiskSnapshotProvider(daily_risk_store=DailyRiskStateStore())
+risk_snapshot_provider = RiskSnapshotProvider(daily_risk_store=DailyRiskStateStore(), positions=positions)
 
 async def _market_tick(account_id: str, symbol: str):
     managed = accounts.accounts.get(account_id)
