@@ -13,6 +13,7 @@ from .execution_ledger import ExecutionLedger
 from .journal import TradingJournal
 from .order_lifecycle import OrderLifecycle
 from .portfolio_state import PortfolioStateManager
+from .market_data_store import MarketDataStore
 from .position_engine import PositionEngine
 from .recovery import BrokerRecovery
 
@@ -25,6 +26,7 @@ class BinanceRuntime:
     websocket: BinanceWebSocketClient
     recovery: BrokerRecovery
     coordinator: ExecutionCoordinator
+    market_data: MarketDataStore
 
 
 def _ws_url(base_url: str) -> str:
@@ -56,6 +58,8 @@ def build_binance_runtime(
     accounts.register(adapter)
 
     lifecycle = OrderLifecycle()
+    market_data = MarketDataStore()
+
     coordinator = ExecutionCoordinator(
         lifecycle,
         journal,
@@ -79,7 +83,7 @@ def build_binance_runtime(
         on_recovered=bridge.mark_reconnected_and_recover,
     )
     return BinanceRuntime(
-        settings.binance_account_id, adapter, bridge, websocket, recovery, coordinator
+        settings.binance_account_id, adapter, bridge, websocket, recovery, coordinator, market_data
     )
 
 
