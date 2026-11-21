@@ -28,6 +28,8 @@ def execution_report_to_update(message: dict[str, Any], account_id: str) -> Orde
     avg_price = (quote_quantity / cumulative_qty) if cumulative_qty > 0 and quote_quantity > 0 else None
 
     side = str(message.get("S", "")).upper() or None
+    last_fill_quantity = float(message.get("l", 0.0) or 0.0)
+    last_fill_price = float(message.get("L", 0.0) or 0.0)
 
     return OrderUpdate(
         broker="BINANCE",
@@ -39,4 +41,6 @@ def execution_report_to_update(message: dict[str, Any], account_id: str) -> Orde
         average_price=avg_price,
         broker_order_id=str(message.get("i")) if message.get("i") is not None else None,
         side=side,
+        last_fill_quantity=last_fill_quantity if last_fill_quantity > 0 else None,
+        last_fill_price=last_fill_price if last_fill_price > 0 else None,
     )
