@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from .account_manager import AccountManager
 from .idempotency import OrderIdempotencyGuard
@@ -12,6 +12,7 @@ from .portfolio_state import PortfolioStateManager
 from .portfolio import AccountSnapshot, DailyLossGuard
 from .order_lifecycle import OrderLifecycle
 from .risk_engine import RiskEngine
+from .risk_snapshot import RiskSnapshotProvider
 
 
 class OrderRouter:
@@ -26,6 +27,8 @@ class OrderRouter:
         snapshot_provider: Callable[[str], AccountSnapshot | None] | None = None,
         lifecycle: OrderLifecycle | None = None,
         risk_engine: RiskEngine | None = None,
+        risk_snapshot_provider: RiskSnapshotProvider | None = None,
+        market_tick_provider: Callable[[str, str], Awaitable[Any | None]] | None = None,
     ):
         self.accounts = accounts
         self.kill_switch = kill_switch or KillSwitch()
@@ -36,6 +39,8 @@ class OrderRouter:
         self.snapshot_provider = snapshot_provider
         self.lifecycle = lifecycle
         self.risk_engine = risk_engine
+        self.risk_snapshot_provider = risk_snapshot_provider
+        self.market_tick_provider = market_tick_provider
 
     def _daily_loss_ok(self, account_id: str, *, live: bool) -> bool:
         # Simulated/testnet execution can proceed without a live account
@@ -70,15 +75,54 @@ class OrderRouter:
             )
 
         if self.risk_engine is not None:
-            snapshot = self.snapshot_provider(account_id) if self.snapshot_provider is not None else None
             metadata = order.metadata or {}
+            tick = None
+            if self.market_tick_provider is not None:
+                tick = await self.market_tick_provider(account_id, order.symbol)
+
+            current_price = metadata.get("current_price") or metadata.get("price")
+            spread_pct = metadata.get("spread_pct")
+            market_age = metadata.get("market_data_age_seconds")
+
+            if tick is not None:
+                current_price = tick.price
+                spread_pct = tick.spread_pct
+                from datetime import datetime, timezone
+                timestamp = tick.timestamp
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+                market_age = max(0.0, (datetime.now(timezone.utc) - timestamp).total_seconds())
+
+            snapshot = None
+            total_exposure = 0.0
+            symbol_exposure = 0.0
+            if self.snapshot_provider is not None:
+                snapshot = self.snapshot_provider(account_id)
+
+            managed_state = self.portfolio_state.get(account_id) if self.portfolio_state is not None else None
+            if self.risk_snapshot_provider is not None and managed_state is not None and current_price is not None:
+                prices = {order.symbol.upper(): float(current_price)}
+                total_exposure, exposures = self.risk_snapshot_provider.exposures(
+                    managed_state, prices=prices
+                )
+                symbol_exposure = exposures.get(order.symbol.upper(), 0.0)
+                snapshot = self.risk_snapshot_provider.build(
+                    managed_state, prices=prices
+                )
+
+            if snapshot is None:
+                raise RuntimeError("risk snapshot is unavailable")
+
             self.risk_engine.assert_allowed(
                 order,
                 snapshot,
-                current_price=metadata.get("current_price"),
+                current_price=current_price,
                 stop_price=metadata.get("stop_price"),
-                spread_pct=metadata.get("spread_pct"),
+                spread_pct=spread_pct,
                 expected_fill_price=metadata.get("expected_fill_price"),
+                market_data_age_seconds=market_age,
+                current_total_exposure=total_exposure,
+                current_symbol_exposure=symbol_exposure,
             )
 
         key = f"{account_id}:{order.client_order_id}"
