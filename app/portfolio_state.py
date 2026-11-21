@@ -38,10 +38,20 @@ class PortfolioStateManager:
         account_id: str,
         broker: str,
         balances: dict[str, float],
-        positions: list[dict[str, Any]],
-        open_orders: list[dict[str, Any]],
-        executions: list[dict[str, Any]],
+        positions: list[dict[str, Any]] | None = None,
+        open_orders: list[dict[str, Any]] | None = None,
+        executions: list[dict[str, Any]] | None = None,
     ) -> BrokerState:
+        # Backward compatibility: older callers passed positions as the third
+        # positional argument and omitted executions.
+        if isinstance(balances, list):
+            legacy_positions = balances
+            balances = {}
+            if positions in (None, []):
+                positions = legacy_positions
+        positions = positions or []
+        open_orders = open_orders or []
+        executions = executions or []
         normalized_positions = {
             str(p["asset"]).upper(): float(p["quantity"]) for p in positions
         }
