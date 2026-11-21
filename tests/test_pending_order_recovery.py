@@ -1,0 +1,220 @@
+import pytest
+
+from app.account_manager import AccountManager
+from app.brokers.base import BrokerAccount, BrokerAdapter
+from app.event_bus import EventBus
+from app.execution_gate import ExecutionGate
+from app.idempotency import OrderIdempotencyGuard
+from app.journal import TradingJournal
+from app.kill_switch import EmergencySafetySystem
+from app.order_lifecycle import OrderLifecycle, OrderStatus
+from app.order_models import OrderRequest, OrderSide
+from app.order_router import OrderRouter
+from app.pending_orders import PendingOrderStore
+from app.portfolio_state import PortfolioStateManager
+from app.recovery import BrokerRecovery
+
+
+class TimeoutAdapter(BrokerAdapter):
+    def __init__(self, outcome="FILLED"):
+        self.account = BrokerAccount("A", "BINANCE", "TESTNET")
+        self.outcome = outcome
+        self.place_calls = 0
+
+    async def get_balance(self):
+        return {"USDT": 1000.0}
+
+    async def get_positions(self):
+        return []
+
+    async def get_open_orders(self, symbol=None):
+        return []
+
+    async def get_order_by_client_id(self, symbol, client_order_id):
+        if self.outcome is None:
+            return None
+        return {
+            "status": self.outcome,
+            "symbol": symbol,
+            "side": "BUY",
+            "origQty": "0.01",
+            "executedQty": "0.01" if self.outcome == "FILLED" else "0",
+            "avgPrice": "100",
+            "orderId": "9001",
+            "clientOrderId": client_order_id,
+        }
+
+    async def place_order(self, symbol, side, quantity, order_type="MARKET", **kwargs):
+        self.place_calls += 1
+        raise TimeoutError("request timed out after broker accepted request")
+
+    async def cancel_order(self, symbol, order_id):
+        return {"status": "CANCELED"}
+
+
+def build_router(adapter, lifecycle, pending):
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    return OrderRouter(
+        accounts,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+        idempotency=OrderIdempotencyGuard(),
+        lifecycle=lifecycle,
+        pending_orders=pending,
+    )
+
+
+@pytest.mark.asyncio
+async def test_timeout_persists_unknown_order_and_never_resubmits():
+    adapter = TimeoutAdapter()
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    router = build_router(adapter, lifecycle, pending)
+
+    with pytest.raises(RuntimeError, match="outcome is unknown"):
+        await router.route("A", OrderRequest(
+            "timeout-1", "BTCUSDT", OrderSide.BUY, 0.01
+        ))
+
+    assert adapter.place_calls == 1
+    assert lifecycle.get("timeout-1", "A", "BINANCE").status is OrderStatus.UNKNOWN
+    assert [p.client_order_id for p in pending.list_account("A", "BINANCE")] == ["timeout-1"]
+
+    with pytest.raises(RuntimeError, match="duplicate client order id"):
+        await router.route("A", OrderRequest(
+            "timeout-1", "BTCUSDT", OrderSide.BUY, 0.01
+        ))
+    assert adapter.place_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_unknown_order_recovers_to_filled_and_resolves_pending():
+    adapter = TimeoutAdapter("FILLED")
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    pending.mark(__import__("app.pending_orders", fromlist=["PendingOrder"]).PendingOrder(
+        "BINANCE", "A", "fill-1", "BTCUSDT", "BUY", 0.01
+    ))
+    lifecycle.apply(__import__("app.order_lifecycle", fromlist=["OrderUpdate"]).OrderUpdate(
+        broker="BINANCE", account_id="A", client_order_id="fill-1",
+        status=OrderStatus.UNKNOWN, symbol="BTCUSDT", side="BUY",
+        original_quantity=0.01,
+    ))
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=lifecycle, pending_orders=pending,
+    )
+
+    result = await recovery.recover_account("A")
+    assert result.confirmed is True
+    assert lifecycle.get("fill-1", "A", "BINANCE").status is OrderStatus.FILLED
+    assert pending.list_account("A", "BINANCE") == []
+
+
+@pytest.mark.asyncio
+async def test_unknown_order_recovers_to_canceled_and_resolves_pending():
+    adapter = TimeoutAdapter("CANCELED")
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    from app.order_lifecycle import OrderUpdate
+    pending.mark(PendingOrder("BINANCE", "A", "cancel-1", "BTCUSDT", "BUY", 0.01))
+    lifecycle.apply(OrderUpdate(
+        broker="BINANCE", account_id="A", client_order_id="cancel-1",
+        status=OrderStatus.UNKNOWN, symbol="BTCUSDT", side="BUY",
+        original_quantity=0.01,
+    ))
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=lifecycle, pending_orders=pending,
+    )
+
+    result = await recovery.recover_account("A")
+    assert result.confirmed is True
+    assert lifecycle.get("cancel-1", "A", "BINANCE").status is OrderStatus.CANCELED
+    assert pending.list_account("A", "BINANCE") == []
+
+
+@pytest.mark.asyncio
+async def test_pending_order_survives_restart_and_blocks_resubmission():
+    adapter = TimeoutAdapter("FILLED")
+    pending_path = ":memory:"
+
+    pending1 = PendingOrderStore(pending_path)
+    from app.pending_orders import PendingOrder
+    pending1.mark(PendingOrder("BINANCE", "A", "restart-1", "BTCUSDT", "BUY", 0.01))
+    lifecycle1 = OrderLifecycle()
+    from app.order_lifecycle import OrderUpdate
+    lifecycle1.apply(OrderUpdate(
+        broker="BINANCE", account_id="A", client_order_id="restart-1",
+        status=OrderStatus.UNKNOWN, symbol="BTCUSDT", side="BUY",
+        original_quantity=0.01,
+    ))
+
+    # Use a real file for the restart boundary.
+    import tempfile
+    path = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+    try:
+        store = PendingOrderStore(path)
+        store.mark(PendingOrder("BINANCE", "A", "restart-1", "BTCUSDT", "BUY", 0.01))
+
+        accounts = AccountManager()
+        accounts.register(adapter)
+        state = PortfolioStateManager()
+        state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+        lifecycle2 = OrderLifecycle()
+        recovery = BrokerRecovery(
+            accounts, state, TradingJournal(":memory:"),
+            lifecycle=lifecycle2, pending_orders=store,
+        )
+        await recovery.recover_account("A")
+
+        recovered = lifecycle2.get("restart-1", "A", "BINANCE")
+        assert recovered is not None
+        assert recovered.status is OrderStatus.FILLED
+        assert store.list_account("A", "BINANCE") == []
+
+        router = build_router(adapter, lifecycle2, store)
+        with pytest.raises(RuntimeError, match="duplicate client order id"):
+            await router.route("A", OrderRequest(
+                "restart-1", "BTCUSDT", OrderSide.BUY, 0.01
+            ))
+        assert adapter.place_calls == 0
+    finally:
+        import os
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_recovery_failure_freezes_account():
+    adapter = TimeoutAdapter()
+    async def broken_balance():
+        raise RuntimeError("broker unavailable")
+    adapter.get_balance = broken_balance
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    safety = EmergencySafetySystem(accounts, __import__("app.kill_switch", fromlist=["KillSwitch"]).KillSwitch(), EventBus())
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"), emergency=safety
+    )
+
+    result = await recovery.recover_account("A")
+    assert result.confirmed is False
+    assert recovery.phase("A").value == "FAILED"
+    assert safety.is_frozen("A")
