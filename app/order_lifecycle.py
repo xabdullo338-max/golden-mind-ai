@@ -28,6 +28,12 @@ class OrderUpdate:
     last_fill_price: float | None = None
     original_quantity: float | None = None
 
+    @property
+    def remaining_quantity(self) -> float | None:
+        if self.original_quantity is None:
+            return None
+        return max(0.0, self.original_quantity - self.executed_quantity)
+
     def __post_init__(self):
         if self.executed_quantity < 0:
             raise ValueError("executed_quantity cannot be negative")
