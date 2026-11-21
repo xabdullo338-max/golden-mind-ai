@@ -16,6 +16,7 @@ from .portfolio_state import PortfolioStateManager
 from .market_data_store import MarketDataStore
 from .position_engine import PositionEngine
 from .recovery import BrokerRecovery
+from .kill_switch import EmergencySafetySystem
 
 
 @dataclass
@@ -43,6 +44,7 @@ def build_binance_runtime(
     journal: TradingJournal,
     positions: PositionEngine | None = None,
     market_data: MarketDataStore | None = None,
+    emergency: EmergencySafetySystem | None = None,
 ) -> BinanceRuntime:
     mode = settings.trading_mode.upper()
     if mode not in {"PAPER", "TESTNET", "DEMO", "LIVE"}:
@@ -81,6 +83,7 @@ def build_binance_runtime(
         coordinator,
         portfolio_state=portfolio_state,
         recovery=recovery,
+        emergency=emergency,
     )
 
     websocket = BinanceWebSocketClient(
