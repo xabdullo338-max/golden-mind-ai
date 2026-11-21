@@ -55,14 +55,16 @@ def build_binance_runtime(
     )
     accounts.register(adapter)
 
+    lifecycle = OrderLifecycle()
     coordinator = ExecutionCoordinator(
-        OrderLifecycle(),
+        lifecycle,
         journal,
         event_bus,
         positions=PositionEngine(),
         execution_ledger=ExecutionLedger("data/golden_mind_execution.db"),
     )
-    recovery = BrokerRecovery(accounts, portfolio_state, journal, positions=coordinator.positions)
+    recovery = BrokerRecovery(accounts, portfolio_state, journal,
+                              positions=coordinator.positions, lifecycle=lifecycle)
     bridge = BinanceExecutionBridge(
         settings.binance_account_id,
         coordinator,
