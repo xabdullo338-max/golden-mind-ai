@@ -234,3 +234,27 @@ async def test_recovery_failure_freezes_account():
     assert result.confirmed is False
     assert recovery.phase("A").value == "FAILED"
     assert safety.is_frozen("A")
+
+
+@pytest.mark.asyncio
+async def test_unresolved_pending_order_freezes_account_after_recovery():
+    adapter = TimeoutAdapter(None)
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    pending.mark(PendingOrder("BINANCE", "A", "unknown-1", "BTCUSDT", "BUY", 0.01))
+    kill_switch = __import__("app.kill_switch", fromlist=["KillSwitch"]).KillSwitch()
+    safety = EmergencySafetySystem(accounts, kill_switch, EventBus())
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=OrderLifecycle(), pending_orders=pending, emergency=safety
+    )
+
+    result = await recovery.recover_account("A")
+    assert result.confirmed is False
+    assert recovery.phase("A").value == "FAILED"
+    assert safety.is_frozen("A")
+    assert pending.list_account("A", "BINANCE")
