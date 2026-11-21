@@ -10,6 +10,7 @@ from .order_models import OrderRequest
 from .execution_gate import ExecutionGate
 from .portfolio_state import PortfolioStateManager
 from .portfolio import AccountSnapshot, DailyLossGuard
+from .order_lifecycle import OrderLifecycle, OrderStatus
 
 
 class OrderRouter:
@@ -22,6 +23,7 @@ class OrderRouter:
         portfolio_state: PortfolioStateManager | None = None,
         daily_loss_guard: DailyLossGuard | None = None,
         snapshot_provider: Callable[[str], AccountSnapshot | None] | None = None,
+        lifecycle: OrderLifecycle | None = None,
     ):
         self.accounts = accounts
         self.kill_switch = kill_switch or KillSwitch()
@@ -30,6 +32,7 @@ class OrderRouter:
         self.portfolio_state = portfolio_state
         self.daily_loss_guard = daily_loss_guard or DailyLossGuard()
         self.snapshot_provider = snapshot_provider
+        self.lifecycle = lifecycle
 
     def _daily_loss_ok(self, account_id: str, *, live: bool) -> bool:
         # Simulated/testnet execution can proceed without a live account
@@ -64,6 +67,13 @@ class OrderRouter:
             )
 
         key = f"{account_id}:{order.client_order_id}"
+        # After a restart, broker recovery may already have hydrated this client
+        # order into the lifecycle. Never submit it again just because the
+        # in-memory idempotency window was lost.
+        if self.lifecycle is not None:
+            recovered = self.lifecycle.get(order.client_order_id, account_id, managed.adapter.account.broker)
+            if recovered is not None:
+                raise RuntimeError("duplicate client order id: order already known to lifecycle")
         decision = self.idempotency.check_and_mark(key)
         if not decision.allowed:
             raise RuntimeError(decision.reason)
