@@ -24,9 +24,8 @@ def execution_report_to_update(message: dict[str, Any], account_id: str) -> Orde
         return None
 
     cumulative_qty = float(message.get("z", 0.0) or 0.0)
-    avg_price = float(message.get("Z", 0.0) or 0.0)
-    if avg_price <= 0:
-        avg_price = None
+    quote_quantity = float(message.get("Z", 0.0) or 0.0)
+    avg_price = (quote_quantity / cumulative_qty) if cumulative_qty > 0 and quote_quantity > 0 else None
 
     side = str(message.get("S", "")).upper() or None
 
