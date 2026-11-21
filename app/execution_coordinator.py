@@ -47,8 +47,16 @@ class ExecutionCoordinator:
             saved = self.journal.get_order(applied.client_order_id, applied.account_id, applied.broker) or {}
             side = str(saved.get("side") or applied.side or "").upper()
             if side in {"BUY", "SELL"}:
-                self.positions.apply_fill(applied.account_id, applied.symbol, side,
-                                           delta, applied.average_price)
+                fill_price = applied.last_fill_price or applied.average_price
+                fill_quantity = applied.last_fill_quantity
+                # The execution ledger is authoritative for the new cumulative delta.
+                # Binance also provides the last-fill quantity/price, which is more
+                # accurate than applying the cumulative average price to the delta.
+                if fill_quantity is not None and fill_quantity > 0 and abs(fill_quantity - delta) > 1e-12:
+                    fill_quantity = delta
+                if fill_price is not None:
+                    self.positions.apply_fill(applied.account_id, applied.symbol, side,
+                                               delta, fill_price)
 
         saved = self.journal.get_order(applied.client_order_id, applied.account_id, applied.broker) or {}
         self.journal.upsert_order(JournalOrder(
