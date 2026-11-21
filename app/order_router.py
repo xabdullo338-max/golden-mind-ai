@@ -9,7 +9,7 @@ from .kill_switch import KillSwitch
 from .order_models import OrderRequest
 from .execution_gate import ExecutionGate
 from .portfolio_state import PortfolioStateManager
-from .risk import AccountSnapshot, DailyLossGuard
+from .portfolio import AccountSnapshot, DailyLossGuard
 
 
 class OrderRouter:
