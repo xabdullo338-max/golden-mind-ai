@@ -10,7 +10,7 @@ from app.journal import TradingJournal
 from app.order_lifecycle import OrderLifecycle
 from app.portfolio_state import PortfolioStateManager
 from app.position_engine import PositionEngine
-from app.recovery import BrokerRecovery
+from app.recovery import BrokerRecovery, RecoveryPhase
 
 
 class RecoveryAdapter(BrokerAdapter):
@@ -112,25 +112,22 @@ async def test_recovery_requires_broker_truth_not_stale_local_state():
     successful = await bridge.mark_reconnected_and_recover()
     assert successful is True
     assert state.is_confirmed("A")
-from app.recovery import RecoveryPhase
 
-
-def test_recovery_phase_starts_idle():
-    recovery = make_recovery()
+@pytest.mark.asyncio
+async def test_recovery_phase_transitions_to_confirmed():
+    bridge, adapter, state = build_bridge()
+    recovery = bridge.recovery
     assert recovery.phase("A") is RecoveryPhase.IDLE
-
-
-@pytest.mark.asyncio
-async def test_recovery_failure_enters_failed_phase():
-    recovery = make_recovery(failing=True)
-    result = await recovery.recover_account("A")
-    assert result.confirmed is False
-    assert recovery.phase("A") is RecoveryPhase.FAILED
-
-
-@pytest.mark.asyncio
-async def test_successful_recovery_enters_confirmed_phase():
-    recovery = make_recovery()
     result = await recovery.recover_account("A")
     assert result.confirmed is True
     assert recovery.phase("A") is RecoveryPhase.CONFIRMED
+
+
+@pytest.mark.asyncio
+async def test_recovery_phase_transitions_to_failed():
+    bridge, adapter, state = build_bridge()
+    recovery = bridge.recovery
+    adapter.fail_recovery = True
+    result = await recovery.recover_account("A")
+    assert result.confirmed is False
+    assert recovery.phase("A") is RecoveryPhase.FAILED
