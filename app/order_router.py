@@ -16,6 +16,7 @@ from .risk_engine import RiskEngine
 from .risk_snapshot import RiskSnapshotProvider
 from .market_data import MarketTick
 from .market_data_store import MarketDataStore
+from .kill_switch import EmergencySafetySystem
 
 
 class OrderRouter:
@@ -33,6 +34,7 @@ class OrderRouter:
         risk_snapshot_provider: RiskSnapshotProvider | None = None,
         market_tick_provider: Callable[[str, str], Awaitable[Any | None]] | None = None,
         market_data_store: MarketDataStore | None = None,
+        emergency: EmergencySafetySystem | None = None,
     ):
         self.accounts = accounts
         self.kill_switch = kill_switch or KillSwitch()
@@ -46,6 +48,7 @@ class OrderRouter:
         self.risk_snapshot_provider = risk_snapshot_provider
         self.market_tick_provider = market_tick_provider
         self.market_data_store = market_data_store
+        self.emergency = emergency
 
     def _daily_loss_ok(self, account_id: str, *, live: bool) -> bool:
         # Simulated/testnet execution can proceed without a live account
@@ -215,8 +218,10 @@ class OrderRouter:
 
         try:
             return await self.accounts.order_to(account_id, order)
-        except Exception:
+        except Exception as exc:
             self.idempotency.forget(key)
+            if self.emergency is not None:
+                await self.emergency.record_rejection(account_id, str(exc))
             raise
 
     async def broadcast(self, order: OrderRequest) -> list[dict[str, Any]]:
