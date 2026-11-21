@@ -17,6 +17,7 @@ from .risk_snapshot import RiskSnapshotProvider
 from .market_data import MarketTick
 from .market_data_store import MarketDataStore
 from .kill_switch import EmergencySafetySystem
+from .pending_orders import PendingOrder, PendingOrderStore
 
 
 class OrderRouter:
@@ -35,6 +36,7 @@ class OrderRouter:
         market_tick_provider: Callable[[str, str], Awaitable[Any | None]] | None = None,
         market_data_store: MarketDataStore | None = None,
         emergency: EmergencySafetySystem | None = None,
+        pending_orders: PendingOrderStore | None = None,
     ):
         self.accounts = accounts
         self.kill_switch = kill_switch or KillSwitch()
@@ -49,6 +51,7 @@ class OrderRouter:
         self.market_tick_provider = market_tick_provider
         self.market_data_store = market_data_store
         self.emergency = emergency
+        self.pending_orders = pending_orders
 
     def _daily_loss_ok(self, account_id: str, *, live: bool) -> bool:
         # Simulated/testnet execution can proceed without a live account
@@ -220,6 +223,34 @@ class OrderRouter:
             return await self.accounts.order_to(account_id, order)
         except Exception as exc:
             self.idempotency.forget(key)
+            # A timeout is not equivalent to a broker rejection: the request may
+            # have reached Binance and the response may simply have been lost.
+            # Persist the identity so recovery can ask the broker for truth.
+            if self.pending_orders is not None and (
+                "timeout" in str(exc).lower() or "timed out" in str(exc).lower()
+            ):
+                self.pending_orders.mark(PendingOrder(
+                    broker=managed.adapter.account.broker,
+                    account_id=account_id,
+                    client_order_id=order.client_order_id,
+                    symbol=order.symbol,
+                    side=order.side.value,
+                    quantity=order.quantity,
+                ))
+                if self.lifecycle is not None:
+                    from .order_lifecycle import OrderStatus, OrderUpdate
+                    self.lifecycle.apply(OrderUpdate(
+                        broker=managed.adapter.account.broker,
+                        account_id=account_id,
+                        client_order_id=order.client_order_id,
+                        status=OrderStatus.UNKNOWN,
+                        symbol=order.symbol,
+                        side=order.side.value,
+                        original_quantity=order.quantity,
+                    ))
+                raise RuntimeError(
+                    "broker order outcome is unknown; reconciliation required"
+                ) from exc
             if self.emergency is not None:
                 await self.emergency.record_rejection(account_id, str(exc))
             raise
