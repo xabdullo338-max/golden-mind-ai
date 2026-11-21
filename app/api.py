@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from .account_manager import AccountManager
 from .auth import authenticate, create_access_token, require_scope, role_scopes
 from .config import Settings
+from .daily_risk_state import DailyRiskStateStore
 from .event_bus import EventBus, TradingEvent
 from .execution_gate import ExecutionGate
 from .journal import TradingJournal
@@ -41,7 +42,7 @@ risk_engine = RiskEngine(
     cooldown_seconds=settings.risk_cooldown_seconds,
     max_consecutive_losses=settings.max_consecutive_losses,
 )
-risk_snapshot_provider = RiskSnapshotProvider()
+risk_snapshot_provider = RiskSnapshotProvider(daily_risk_store=DailyRiskStateStore())
 
 async def _market_tick(account_id: str, symbol: str):
     managed = accounts.accounts.get(account_id)
