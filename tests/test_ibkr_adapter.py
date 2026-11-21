@@ -5,7 +5,7 @@ from app.brokers.ibkr import IBKRAdapter
 async def test_ibkr_paper_order_is_local():
     adapter = IBKRAdapter("IBKR-PAPER", mode="PAPER")
     result = await adapter.place_order("AAPL", "BUY", 1)
-    assert result["status"] == "PAPER"
+    assert result["status"] == "FILLED"
     assert result["broker"] == "IBKR"
 
 @pytest.mark.asyncio
