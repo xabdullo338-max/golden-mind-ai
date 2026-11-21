@@ -102,6 +102,20 @@ class OrderRouter:
             managed_state = self.portfolio_state.get(account_id) if self.portfolio_state is not None else None
             if self.risk_snapshot_provider is not None and managed_state is not None and current_price is not None:
                 prices = {order.symbol.upper(): float(current_price)}
+                if self.market_tick_provider is not None:
+                    for asset, quantity in managed_state.positions.items():
+                        if float(quantity) <= 0:
+                            continue
+                        symbol = str(asset).upper()
+                        if symbol.endswith("USDT"):
+                            symbol = symbol
+                        else:
+                            symbol = f"{symbol}USDT"
+                        if symbol not in prices:
+                            position_tick = await self.market_tick_provider(account_id, symbol)
+                            if position_tick is None:
+                                raise RuntimeError(f"market data unavailable for {symbol}")
+                            prices[symbol] = position_tick.price
                 total_exposure, exposures = self.risk_snapshot_provider.exposures(
                     managed_state, prices=prices
                 )
