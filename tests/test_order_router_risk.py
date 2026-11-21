@@ -81,3 +81,112 @@ async def test_router_uses_broker_snapshot_and_exposure():
     with pytest.raises(RuntimeError, match="symbol exposure"):
         await router.route("A", OrderRequest("risk-2", "BTCUSDT", OrderSide.BUY, 0.007))
     assert adapter.orders == 0
+
+
+
+@pytest.mark.asyncio
+async def test_router_uses_market_data_store_as_source_of_truth():
+    manager = AccountManager()
+    adapter = RiskAdapter()
+    manager.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+
+    from app.market_data_store import MarketDataStore
+
+    store = MarketDataStore()
+    cached = MarketTick(
+        "BINANCE",
+        "BTCUSDT",
+        31000.0,
+        datetime.now(timezone.utc),
+    )
+    store.update(cached)
+
+    calls = 0
+
+    async def provider(account_id, symbol):
+        nonlocal calls
+        calls += 1
+        return MarketTick(
+            "BINANCE",
+            symbol,
+            30000.0,
+            datetime.now(timezone.utc),
+        )
+
+    router = OrderRouter(
+        manager,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+        risk_engine=RiskEngine(max_market_data_age_seconds=2.0),
+        risk_snapshot_provider=RiskSnapshotProvider(
+            daily_start_equity={"A": 1000.0}
+        ),
+        market_tick_provider=provider,
+        market_data_store=store,
+    )
+
+    await router.route(
+        "A",
+        OrderRequest("risk-store-1", "BTCUSDT", OrderSide.BUY, 0.001),
+    )
+
+    assert calls == 0
+    assert store.get("BINANCE", "BTCUSDT").price == 31000.0
+    assert adapter.orders == 1
+
+
+@pytest.mark.asyncio
+async def test_router_refreshes_stale_market_data_store():
+    manager = AccountManager()
+    adapter = RiskAdapter()
+    manager.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+
+    from app.market_data_store import MarketDataStore
+    from datetime import timedelta
+
+    store = MarketDataStore()
+    store.update(
+        MarketTick(
+            "BINANCE",
+            "BTCUSDT",
+            31000.0,
+            datetime.now(timezone.utc) - timedelta(seconds=3),
+        )
+    )
+
+    calls = 0
+
+    async def provider(account_id, symbol):
+        nonlocal calls
+        calls += 1
+        return MarketTick(
+            "BINANCE",
+            symbol,
+            30000.0,
+            datetime.now(timezone.utc),
+        )
+
+    router = OrderRouter(
+        manager,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+        risk_engine=RiskEngine(max_market_data_age_seconds=2.0),
+        risk_snapshot_provider=RiskSnapshotProvider(
+            daily_start_equity={"A": 1000.0}
+        ),
+        market_tick_provider=provider,
+        market_data_store=store,
+    )
+
+    await router.route(
+        "A",
+        OrderRequest("risk-store-2", "BTCUSDT", OrderSide.BUY, 0.001),
+    )
+
+    assert calls == 1
+    assert store.get("BINANCE", "BTCUSDT").price == 30000.0
+    assert adapter.orders == 1
