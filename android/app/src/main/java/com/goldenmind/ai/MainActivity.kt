@@ -49,7 +49,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                 OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true)
                 error?.let { Text(it, color = Red, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
                 Spacer(Modifier.height(16.dp))
-                Button(enabled = !busy && username.isNotBlank() && password.isNotBlank(), onClick = {
+                Button(onClick = {
                     busy = true
                     Thread {
                         try {
@@ -136,7 +136,7 @@ fun GoldenMindApp() {
                 0 -> DashboardScreen(health, accounts, false, null, padding, {})
                 1 -> TradeScreen(padding)
                 2 -> RobotScreen(padding)
-                3 -> AccountsScreen(padding)
+                3 -> AccountsScreen(accounts, api, padding)
                 else -> RiskScreen(padding)
             }
         }
