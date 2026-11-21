@@ -18,7 +18,9 @@ from .pending_orders import PendingOrderStore
 settings = Settings()
 accounts = AccountManager()
 kill_switch = KillSwitch()
-execution_gate = ExecutionGate()
+execution_gate = ExecutionGate(
+    live_trading_enabled=settings.live_trading_enabled,
+)
 portfolio_state = PortfolioStateManager()
 positions = PositionEngine()
 market_data = MarketDataStore()
