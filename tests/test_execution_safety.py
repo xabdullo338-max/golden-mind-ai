@@ -6,6 +6,9 @@ from app.execution_gate import ExecutionGate
 from app.order_models import OrderRequest, OrderSide
 from app.order_router import OrderRouter
 from app.portfolio_state import PortfolioStateManager
+from app.execution_ledger import ExecutionLedger
+from app.idempotency import OrderIdempotencyGuard
+
 
 class FakeAdapter(BrokerAdapter):
     def __init__(self, mode: str):
@@ -23,8 +26,6 @@ class FakeAdapter(BrokerAdapter):
     async def cancel_order(self, symbol, order_id):
         return {"status": "CANCELED"}
 
-from app.execution_ledger import ExecutionLedger
-from app.idempotency import OrderIdempotencyGuard
 
 def test_execution_delta_uses_cumulative_quantity():
     ledger = ExecutionLedger()
@@ -32,10 +33,12 @@ def test_execution_delta_uses_cumulative_quantity():
     assert ledger.delta("1", 2.0) == 0.0
     assert ledger.delta("1", 3.5) == 1.5
 
+
 def test_idempotency_guard_rejects_duplicate():
     guard = OrderIdempotencyGuard()
     assert guard.check_and_mark("gmai-1").allowed
     assert not guard.check_and_mark("gmai-1").allowed
+
 
 @pytest.mark.asyncio
 async def test_testnet_order_requires_reconciled_state():
@@ -47,6 +50,7 @@ async def test_testnet_order_requires_reconciled_state():
     with pytest.raises(RuntimeError, match="Broker state is not reconciled"):
         await router.route("A", OrderRequest("t1", "BTCUSDT", OrderSide.BUY, 0.001))
 
+
 @pytest.mark.asyncio
 async def test_testnet_order_allowed_after_reconciliation():
     manager = AccountManager()
@@ -57,6 +61,7 @@ async def test_testnet_order_allowed_after_reconciliation():
 
     result = await router.route("A", OrderRequest("t2", "BTCUSDT", OrderSide.BUY, 0.001))
     assert result["status"] == "FILLED"
+
 
 @pytest.mark.asyncio
 async def test_live_order_is_blocked_even_if_adapter_exists(monkeypatch):
