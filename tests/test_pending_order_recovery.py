@@ -258,3 +258,35 @@ async def test_unresolved_pending_order_freezes_account_after_recovery():
     assert recovery.phase("A").value == "FAILED"
     assert safety.is_frozen("A")
     assert pending.list_account("A", "BINANCE")
+
+
+@pytest.mark.asyncio
+async def test_frozen_account_blocks_new_order_after_unresolved_recovery():
+    adapter = TimeoutAdapter(None)
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    pending.mark(PendingOrder("BINANCE", "A", "unknown-2", "BTCUSDT", "BUY", 0.01))
+    kill_switch = __import__("app.kill_switch", fromlist=["KillSwitch"]).KillSwitch()
+    safety = EmergencySafetySystem(accounts, kill_switch, EventBus())
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=OrderLifecycle(), pending_orders=pending, emergency=safety
+    )
+
+    await recovery.recover_account("A")
+
+    router = OrderRouter(
+        accounts,
+        kill_switch=kill_switch,
+        execution_gate=ExecutionGate(),
+        portfolio_state=state,
+        pending_orders=pending,
+    )
+    with pytest.raises(RuntimeError, match="Kill switch is active"):
+        await router.route(
+            "A", OrderRequest("new-after-freeze", "BTCUSDT", OrderSide.BUY, 0.01)
+        )
