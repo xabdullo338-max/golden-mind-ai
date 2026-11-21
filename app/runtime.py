@@ -24,6 +24,7 @@ class BinanceRuntime:
     bridge: BinanceExecutionBridge
     websocket: BinanceWebSocketClient
     recovery: BrokerRecovery
+    coordinator: ExecutionCoordinator
 
 
 def _ws_url(base_url: str) -> str:
@@ -76,7 +77,7 @@ def build_binance_runtime(
         on_recovered=bridge.mark_reconnected_and_recover,
     )
     return BinanceRuntime(
-        settings.binance_account_id, adapter, bridge, websocket, recovery
+        settings.binance_account_id, adapter, bridge, websocket, recovery, coordinator
     )
 
 
