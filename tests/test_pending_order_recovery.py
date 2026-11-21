@@ -3,6 +3,8 @@ import pytest
 from app.account_manager import AccountManager
 from app.brokers.base import BrokerAccount, BrokerAdapter
 from app.event_bus import EventBus
+from app.execution_coordinator import ExecutionCoordinator
+from app.execution_ledger import ExecutionLedger
 from app.execution_gate import ExecutionGate
 from app.idempotency import OrderIdempotencyGuard
 from app.journal import TradingJournal
@@ -12,6 +14,7 @@ from app.order_models import OrderRequest, OrderSide
 from app.order_router import OrderRouter
 from app.pending_orders import PendingOrderStore
 from app.portfolio_state import PortfolioStateManager
+from app.position_engine import PositionEngine
 from app.recovery import BrokerRecovery
 
 
@@ -108,15 +111,28 @@ async def test_unknown_order_recovers_to_filled_and_resolves_pending():
     accounts.register(adapter)
     state = PortfolioStateManager()
     state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    positions = PositionEngine()
+    coordinator = ExecutionCoordinator(
+        lifecycle,
+        TradingJournal(":memory:"),
+        EventBus(),
+        positions=positions,
+        execution_ledger=ExecutionLedger(":memory:"),
+    )
     recovery = BrokerRecovery(
         accounts, state, TradingJournal(":memory:"),
         lifecycle=lifecycle, pending_orders=pending,
+        execution_coordinator=coordinator,
     )
 
     result = await recovery.recover_account("A")
     assert result.confirmed is True
     assert lifecycle.get("fill-1", "A", "BINANCE").status is OrderStatus.FILLED
     assert pending.list_account("A", "BINANCE") == []
+    position = positions.get("A", "BTCUSDT")
+    assert position is not None
+    assert position.quantity == pytest.approx(0.01)
+    assert position.average_entry == pytest.approx(100.0)
 
 
 @pytest.mark.asyncio
