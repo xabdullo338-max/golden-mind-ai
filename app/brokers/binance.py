@@ -91,6 +91,25 @@ class BinanceAdapter(BrokerAdapter):
         return [{"asset": a, "quantity": q} for a, q in balances.items()
                 if a not in {"USDT", "USDC", "BUSD"}]
 
+    async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
+        if self.account.mode == "PAPER":
+            return [
+                {"symbol": order.get("symbol", symbol), "side": order.get("side"),
+                 "qty": order.get("executedQty", 0), "price": order.get("price", 0),
+                 "commission": 0, "commissionAsset": "USDT",
+                 "time": int(time.time() * 1000), "orderId": order.get("orderId"),
+                 "id": order.get("orderId")}
+                for order in self._paper_orders.values()
+                if str(order.get("symbol", "")).upper() == symbol.upper()
+                and order.get("status") == "FILLED"
+            ]
+        if not self._execution_allowed():
+            raise BinanceAPIError("Execution is disabled for this account mode")
+        return await self._request(
+            "GET", "/api/v3/myTrades", signed=True,
+            params={"symbol": symbol.upper(), "limit": max(1, min(int(limit), 1000))},
+        )
+
     async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
             orders = [o for o in self._paper_orders.values()
