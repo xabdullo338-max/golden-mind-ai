@@ -16,6 +16,29 @@ class RiskSnapshotProvider:
 
     daily_start_equity: dict[str, float] | None = None
 
+    def exposures(
+        self,
+        state: BrokerState,
+        *,
+        prices: dict[str, float],
+    ) -> tuple[float, dict[str, float]]:
+        if not state.confirmed:
+            return 0.0, {}
+        total = 0.0
+        by_symbol: dict[str, float] = {}
+        for asset, quantity in state.positions.items():
+            asset = str(asset).upper()
+            quantity = float(quantity)
+            if quantity <= 0:
+                continue
+            price = prices.get(asset) or prices.get(f"{asset}USDT")
+            if price is None or price <= 0:
+                raise ValueError(f"price unavailable for {asset}")
+            notional = quantity * price
+            total += notional
+            by_symbol[f"{asset}USDT"] = notional
+        return total, by_symbol
+
     def build(
         self,
         state: BrokerState,
