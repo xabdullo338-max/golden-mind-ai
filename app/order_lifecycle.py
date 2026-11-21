@@ -26,6 +26,7 @@ class OrderUpdate:
     side: str | None = None
     last_fill_quantity: float | None = None
     last_fill_price: float | None = None
+    original_quantity: float | None = None
 
     def __post_init__(self):
         if self.executed_quantity < 0:
@@ -34,6 +35,10 @@ class OrderUpdate:
             raise ValueError("last_fill_quantity cannot be negative")
         if self.last_fill_price is not None and self.last_fill_price <= 0:
             raise ValueError("last_fill_price must be positive")
+        if self.original_quantity is not None and self.original_quantity <= 0:
+            raise ValueError("original_quantity must be positive")
+        if self.original_quantity is not None and self.executed_quantity > self.original_quantity + 1e-10:
+            raise ValueError("executed_quantity cannot exceed original_quantity")
 
 class OrderLifecycle:
     """Tracks monotonic broker order state without assuming broker-specific payloads."""
@@ -79,3 +84,12 @@ class OrderLifecycle:
 
     def snapshot(self) -> list[OrderUpdate]:
         return list(self._orders.values())
+
+    def recover_open_order(self, update: OrderUpdate) -> OrderUpdate:
+        """Hydrate broker truth after restart without creating a new order."""
+        if update.status not in {OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED}:
+            raise ValueError("only open broker orders can be recovered")
+        return self.apply(update)
+
+    def has(self, client_order_id: str, account_id: str, broker: str) -> bool:
+        return self.get(client_order_id, account_id, broker) is not None
