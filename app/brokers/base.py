@@ -36,6 +36,10 @@ class BrokerAdapter(ABC):
         """Return currently open orders; adapters may override when supported."""
         return []
 
+    async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
+        """Return recent account trades; adapters may override when supported."""
+        return []
+
     @abstractmethod
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs) -> dict[str, Any]: ...
