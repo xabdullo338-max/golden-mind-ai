@@ -32,8 +32,9 @@ class BrokerAdapter(ABC):
     @abstractmethod
     async def get_positions(self) -> list[dict[str, Any]]: ...
 
-    @abstractmethod
-    async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]: ...
+    async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
+        """Return currently open orders; adapters may override when supported."""
+        return []
 
     @abstractmethod
     async def place_order(self, symbol: str, side: str, quantity: float,
