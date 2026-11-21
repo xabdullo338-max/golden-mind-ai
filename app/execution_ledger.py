@@ -14,11 +14,15 @@ class ExecutionLedger:
     to positions a second time.
     """
 
-    path: str = "data/golden_mind_execution.db"
+    path: str = ":memory:"
 
     def __post_init__(self):
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.path) as db:
+        self._db = sqlite3.connect(self.path)
+        if self.path != ":memory:":
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+            self._db.close()
+            self._db = None
+        db = self._connect()
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS executions (
@@ -31,6 +35,18 @@ class ExecutionLedger:
                 """
             )
             db.commit()
+        finally:
+            self._close(db)
+        if self.path == ":memory:":
+            return
+        db.close()
+
+    def _connect(self):
+        return self._db if self._db is not None else sqlite3.connect(self.path)
+
+    def _close(self, db):
+        if self.path != ":memory:" and db is not self._db:
+            db.close()
 
     def _key(self, order_id: str, account_id: str | None, broker: str | None):
         return (
@@ -51,7 +67,8 @@ class ExecutionLedger:
 
         broker_key, account_key, order_key = self._key(order_id, account_id, broker)
 
-        with sqlite3.connect(self.path) as db:
+        db = self._connect()
+        try:
             row = db.execute(
                 """
                 SELECT cumulative_executed
@@ -86,6 +103,8 @@ class ExecutionLedger:
                 )
             db.commit()
             return delta
+        finally:
+            self._close(db)
 
     def clear(
         self,
@@ -94,7 +113,8 @@ class ExecutionLedger:
         broker: str | None = None,
     ) -> None:
         broker_key, account_key, order_key = self._key(order_id, account_id, broker)
-        with sqlite3.connect(self.path) as db:
+        db = self._connect()
+        try:
             db.execute(
                 """
                 DELETE FROM executions
