@@ -8,8 +8,9 @@ def test_position_size_respects_risk():
 
 def test_position_size_respects_max_notional():
     s = size_position(1000, 100, 50, 2, max_notional=100)
-    assert s.notional == 100
-    assert s.quantity == 1
+    assert s.notional == 40
+    assert s.quantity == 0.4
+    assert s.risk_amount == 20
 
 def test_position_size_rejects_same_stop():
     with pytest.raises(ValueError):
