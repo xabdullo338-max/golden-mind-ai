@@ -1,29 +1,18 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from typing import Annotated
-
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
-
 from .account_manager import AccountManager
-from .auth import authenticate, create_access_token, require_scope, role_scopes
 from .config import Settings
 from .daily_risk_state import DailyRiskStateStore
-from .event_bus import EventBus, TradingEvent
+from .event_bus import EventBus
 from .execution_gate import ExecutionGate
 from .journal import TradingJournal
 from .kill_switch import KillSwitch
-from .order_models import OrderRequest, OrderSide, OrderType
+from .market_data_store import MarketDataStore
 from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
 from .risk_engine import RiskEngine
 from .risk_snapshot import RiskSnapshotProvider
 from .position_engine import PositionEngine
-from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
-from .ws import install_websocket_routes
-
 
 settings = Settings()
 accounts = AccountManager()
@@ -31,8 +20,10 @@ kill_switch = KillSwitch()
 execution_gate = ExecutionGate()
 portfolio_state = PortfolioStateManager()
 positions = PositionEngine()
+market_data = MarketDataStore()
 event_bus = EventBus()
 journal = TradingJournal("data/golden_mind_ai.db")
+
 risk_engine = RiskEngine(
     max_risk_per_trade_pct=settings.max_risk_per_trade_pct,
     max_daily_loss_pct=settings.max_daily_loss_pct,
@@ -44,7 +35,11 @@ risk_engine = RiskEngine(
     cooldown_seconds=settings.risk_cooldown_seconds,
     max_consecutive_losses=settings.max_consecutive_losses,
 )
-risk_snapshot_provider = RiskSnapshotProvider(daily_risk_store=DailyRiskStateStore(), positions=positions)
+
+risk_snapshot_provider = RiskSnapshotProvider(
+    daily_risk_store=DailyRiskStateStore(),
+    positions=positions,
+)
 
 async def _market_tick(account_id: str, symbol: str):
     managed = accounts.accounts.get(account_id)
@@ -60,4 +55,5 @@ order_router = OrderRouter(
     risk_engine=risk_engine,
     risk_snapshot_provider=risk_snapshot_provider,
     market_tick_provider=_market_tick,
+    market_data_store=market_data,
 )
