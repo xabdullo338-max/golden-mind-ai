@@ -32,6 +32,15 @@ class OrderUpdate:
 class OrderLifecycle:
     """Tracks monotonic broker order state without assuming broker-specific payloads."""
     _terminal = {OrderStatus.FILLED, OrderStatus.CANCELED, OrderStatus.REJECTED, OrderStatus.EXPIRED}
+    _rank = {
+        OrderStatus.UNKNOWN: 0,
+        OrderStatus.NEW: 1,
+        OrderStatus.PARTIALLY_FILLED: 2,
+        OrderStatus.FILLED: 3,
+        OrderStatus.CANCELED: 3,
+        OrderStatus.REJECTED: 3,
+        OrderStatus.EXPIRED: 3,
+    }
 
     def __init__(self):
         self._orders: dict[tuple[str, str, str], OrderUpdate] = {}
@@ -45,6 +54,13 @@ class OrderLifecycle:
         current = self._orders.get(key)
         if current and current.status in self._terminal:
             return current
+        if current:
+            current_rank = self._rank[current.status]
+            incoming_rank = self._rank[update.status]
+            # Broker streams can deliver delayed NEW/PARTIALLY_FILLED events
+            # after a newer state. Never let an older lifecycle state regress.
+            if incoming_rank < current_rank:
+                return current
         self._orders[key] = update
         return update
 
