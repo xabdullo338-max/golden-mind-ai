@@ -17,6 +17,7 @@ from .market_data_store import MarketDataStore
 from .position_engine import PositionEngine
 from .recovery import BrokerRecovery
 from .kill_switch import EmergencySafetySystem
+from .pending_orders import PendingOrderStore
 
 
 @dataclass
@@ -45,6 +46,7 @@ def build_binance_runtime(
     positions: PositionEngine | None = None,
     market_data: MarketDataStore | None = None,
     emergency: EmergencySafetySystem | None = None,
+    pending_orders: PendingOrderStore | None = None,
 ) -> BinanceRuntime:
     mode = settings.trading_mode.upper()
     if mode not in {"PAPER", "TESTNET", "DEMO", "LIVE"}:
@@ -63,6 +65,7 @@ def build_binance_runtime(
 
     lifecycle = OrderLifecycle()
     market_data = market_data or MarketDataStore()
+    pending_orders = pending_orders or PendingOrderStore()
 
     coordinator = ExecutionCoordinator(
         lifecycle,
@@ -77,6 +80,8 @@ def build_binance_runtime(
         journal,
         positions=coordinator.positions,
         lifecycle=lifecycle,
+        pending_orders=pending_orders,
+        emergency=emergency,
     )
     bridge = BinanceExecutionBridge(
         settings.binance_account_id,
