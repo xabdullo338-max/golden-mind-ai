@@ -79,5 +79,5 @@ async def test_router_uses_broker_snapshot_and_exposure():
         market_tick_provider=adapter.get_market_tick,
     )
     with pytest.raises(RuntimeError, match="symbol exposure"):
-        await router.route("A", OrderRequest("risk-2", "BTCUSDT", OrderSide.BUY, 0.001))
+        await router.route("A", OrderRequest("risk-2", "BTCUSDT", OrderSide.BUY, 0.007))
     assert adapter.orders == 0
