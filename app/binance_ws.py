@@ -192,7 +192,7 @@ class BinanceEventNormalizer:
     def normalize(message: dict[str, Any], account_id: str) -> TradingEvent:
         event = message.get("event")
         payload = event if isinstance(event, dict) else message
-        event_type = payload.get("e") or message.get("method") or "UNKNOWN"
+        event_type = payload.get("e") or payload.get("event") or message.get("method") or "UNKNOWN"
         mapping = {
             "executionReport": "ORDER_UPDATE",
             "outboundAccountPosition": "POSITION_UPDATE",
