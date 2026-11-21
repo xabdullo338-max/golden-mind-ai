@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from ..market_data import MarketTick
+
 @dataclass(frozen=True)
 class BrokerAccount:
     account_id: str
@@ -35,6 +37,10 @@ class BrokerAdapter(ABC):
     async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
         """Return currently open orders; adapters may override when supported."""
         return []
+
+    async def get_market_tick(self, symbol: str) -> MarketTick | None:
+        """Return the latest market tick; adapters may override when supported."""
+        return None
 
     async def get_trade_history(self, symbol: str, limit: int = 1000) -> list[dict[str, Any]]:
         """Return recent account trades; adapters may override when supported."""
