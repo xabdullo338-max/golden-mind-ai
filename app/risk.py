@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .portfolio import AccountSnapshot, DailyLossGuard
+
 @dataclass(frozen=True)
 class RiskConfig:
     max_risk_per_trade_pct: float = 1.0
