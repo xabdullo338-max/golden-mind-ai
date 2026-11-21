@@ -7,6 +7,7 @@ from typing import Any
 from .position_engine import PositionEngine
 from .order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
 from .pending_orders import PendingOrderStore
+from .kill_switch import EmergencySafetySystem
 
 
 class RecoveryPhase(str, Enum):
@@ -31,7 +32,8 @@ class BrokerRecovery:
 
     def __init__(self, accounts, portfolio_state, journal, positions: PositionEngine | None = None,
                  lifecycle: OrderLifecycle | None = None,
-                 pending_orders: PendingOrderStore | None = None):
+                 pending_orders: PendingOrderStore | None = None,
+                 emergency: EmergencySafetySystem | None = None):
         self.accounts = accounts
         self.portfolio_state = portfolio_state
         self.journal = journal
@@ -39,6 +41,7 @@ class BrokerRecovery:
         self.lifecycle = lifecycle
         self._phase: dict[str, RecoveryPhase] = {}
         self.pending_orders = pending_orders
+        self.emergency = emergency
 
     def phase(self, account_id: str) -> RecoveryPhase:
         return self._phase.get(account_id, RecoveryPhase.IDLE)
@@ -91,6 +94,10 @@ class BrokerRecovery:
             self.portfolio_state.mark_unconfirmed(
                 account_id, adapter.account.broker
             )
+            if self.emergency is not None:
+                await self.emergency.freeze_account(
+                    account_id, f"broker recovery failed: {type(exc).__name__}"
+                )
             self._phase[account_id] = RecoveryPhase.FAILED
             return RecoveryResult(
                 account_id,
