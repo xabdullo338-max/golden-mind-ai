@@ -114,3 +114,73 @@ async def test_reconciliation_restores_order_permission_after_disconnect():
     )
     assert result["status"] == "FILLED"
     assert adapter.place_calls == 1
+
+
+
+@pytest.mark.asyncio
+async def test_account_emergency_freeze_cancels_open_orders_and_emits_audit():
+    from app.event_bus import EventBus
+    from app.kill_switch import EmergencySafetySystem
+
+    class EmergencyAdapter(SafetyAdapter):
+        def __init__(self):
+            super().__init__()
+            self.open_orders = [
+                {"symbol": "BTCUSDT", "orderId": "101", "status": "NEW"},
+                {"symbol": "ETHUSDT", "orderId": "102", "status": "NEW"},
+            ]
+            self.cancelled = []
+
+        async def get_open_orders(self, symbol=None):
+            return list(self.open_orders)
+
+        async def cancel_order(self, symbol, order_id):
+            self.cancelled.append(f"{symbol}:{order_id}")
+            return {"status": "CANCELED"}
+
+    manager = AccountManager()
+    adapter = EmergencyAdapter()
+    manager.register(adapter)
+    events = EventBus()
+    safety = EmergencySafetySystem(manager, KillSwitch(), events)
+
+    queue = events.subscribe()
+    await safety.freeze_account("A", "websocket disconnected")
+
+    assert safety.is_frozen("A")
+    assert adapter.cancelled == ["BTCUSDT:101", "ETHUSDT:102"]
+
+    event_types = []
+    while not queue.empty():
+        event_types.append((await queue.get()).event_type)
+    assert "EMERGENCY_CANCEL_ALL" in event_types
+    assert "EMERGENCY_ACCOUNT_FROZEN" in event_types
+
+
+@pytest.mark.asyncio
+async def test_repeated_broker_rejections_trigger_circuit_breaker():
+    from app.kill_switch import EmergencySafetySystem
+
+    manager = AccountManager()
+    manager.register(SafetyAdapter())
+    safety = EmergencySafetySystem(manager, KillSwitch(), rejection_threshold=3)
+
+    assert not await safety.record_rejection("A", "reject-1")
+    assert not await safety.record_rejection("A", "reject-2")
+    assert await safety.record_rejection("A", "reject-3")
+    assert safety.is_frozen("A")
+
+
+@pytest.mark.asyncio
+async def test_emergency_recovery_unfreezes_account():
+    from app.kill_switch import EmergencySafetySystem
+
+    manager = AccountManager()
+    manager.register(SafetyAdapter())
+    safety = EmergencySafetySystem(manager, KillSwitch())
+
+    await safety.freeze_account("A", "test")
+    assert safety.is_frozen("A")
+
+    await safety.recover_account("A")
+    assert not safety.is_frozen("A")
