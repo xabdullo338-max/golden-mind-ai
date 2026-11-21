@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 32, 28, 28)
-            setBackgroundColor(android.graphics.Color.rgb(11,16,32))
+            setBackgroundColor(android.graphics.Color.rgb(11, 16, 32))
         }
         val title = TextView(this).apply {
             text = "GOLDEN MIND AI"
@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(22, 26, 22, 26)
-            setBackgroundColor(android.graphics.Color.rgb(11,16,32))
+            setBackgroundColor(android.graphics.Color.rgb(11, 16, 32))
         }
         val title = TextView(this).apply {
             text = "GOLDEN MIND AI • TESTNET"
@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
         }
         val badge = TextView(this).apply {
             text = "LIVE TRADING DISABLED BY DEFAULT"
-            setTextColor(android.graphics.Color.rgb(56,189,248))
+            setTextColor(android.graphics.Color.rgb(56, 189, 248))
             textSize = 12f
         }
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -118,17 +118,18 @@ class MainActivity : AppCompatActivity() {
                 conn.requestMethod = "POST"
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                val body = "username=${java.net.URLEncoder.encode(username, "UTF-8")}&password=${java.net.URLEncoder.encode(password, "UTF-8")}"
+                val body = "username=\${java.net.URLEncoder.encode(username, "UTF-8")}&password=\${java.net.URLEncoder.encode(password, "UTF-8")}"
                 conn.outputStream.use { it.write(body.toByteArray()) }
                 val code = conn.responseCode
                 val response = (if (code in 200..299) conn.inputStream else conn.errorStream).bufferedReader().readText()
                 if (code !in 200..299) throw RuntimeException("HTTP $code: $response")
-                val access = Regex(""access_token"\\s*:\\s*"([^"]+)"").find(response)?.groupValues?.get(1)
+                val access = Regex("""\"access_token\"\s*:\s*\"([^\"]+)\"""")
+                    .find(response)?.groupValues?.get(1)
                     ?: throw RuntimeException("Token missing")
                 token = access
                 runOnUiThread { showDashboard(api) }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "Sign-in failed: ${e.message}" }
+                runOnUiThread { status.text = "Sign-in failed: \${e.message}" }
             }
         }
     }
@@ -150,7 +151,7 @@ class MainActivity : AppCompatActivity() {
                     content.addView(a, lp())
                 }
             } catch (e: Exception) {
-                runOnUiThread { status.text = "API error: ${e.message}" }
+                runOnUiThread { status.text = "API error: \${e.message}" }
             }
         }
     }
