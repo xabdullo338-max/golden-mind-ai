@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 from .position_engine import PositionEngine
 from .order_lifecycle import OrderLifecycle, OrderStatus, OrderUpdate
+
+
+class RecoveryPhase(str, Enum):
+    IDLE = "IDLE"
+    RECONCILING = "RECONCILING"
+    CONFIRMED = "CONFIRMED"
+    FAILED = "FAILED"
 
 
 @dataclass(frozen=True)
@@ -27,25 +35,32 @@ class BrokerRecovery:
         self.journal = journal
         self.positions = positions
         self.lifecycle = lifecycle
+        self._phase: dict[str, RecoveryPhase] = {}
+
+    def phase(self, account_id: str) -> RecoveryPhase:
+        return self._phase.get(account_id, RecoveryPhase.IDLE)
 
     async def recover_account(self, account_id: str) -> RecoveryResult:
         managed = self.accounts.accounts.get(account_id)
         if not managed or not managed.enabled:
+            self._phase[account_id] = RecoveryPhase.FAILED
             return RecoveryResult(account_id, {}, [], [], False, "account unavailable")
 
         adapter = managed.adapter
+        self._phase[account_id] = RecoveryPhase.RECONCILING
         try:
             balances = await adapter.get_balance()
             positions = await adapter.get_positions()
             open_orders = await adapter.get_open_orders()
 
-            # Recover cost basis from broker trade history before hydrating the
-            # local position engine. Never invent an entry price when history
-            # cannot fully explain the broker-held quantity.
             if self.positions is not None:
                 await self._hydrate_positions(adapter, positions)
             if self.lifecycle is not None:
-                self._hydrate_open_orders(adapter.account.account_id, adapter.account.broker, open_orders)
+                self._hydrate_open_orders(
+                    adapter.account.account_id,
+                    adapter.account.broker,
+                    open_orders,
+                )
 
             self.portfolio_state.reconcile(
                 account_id=account_id,
@@ -55,6 +70,7 @@ class BrokerRecovery:
                 open_orders=open_orders,
                 executions=[],
             )
+            self._phase[account_id] = RecoveryPhase.CONFIRMED
             return RecoveryResult(
                 account_id,
                 balances,
@@ -67,6 +83,7 @@ class BrokerRecovery:
             self.portfolio_state.mark_unconfirmed(
                 account_id, adapter.account.broker
             )
+            self._phase[account_id] = RecoveryPhase.FAILED
             return RecoveryResult(
                 account_id,
                 {},
@@ -129,15 +146,11 @@ class BrokerRecovery:
             if complete and abs(qty - broker_qty) <= tolerance and qty > 0 and cost >= 0:
                 reconstructed[symbol] = (broker_qty, cost / qty, realized)
 
-        # Only replace the local snapshot when broker history fully reconciles.
-        # Incomplete history must not fabricate an entry price.
         if reconstructed and len(reconstructed) == len(expected_symbols):
             self.positions.clear_account(adapter.account.account_id)
             for symbol, (qty, avg, realized) in reconstructed.items():
                 self.positions.hydrate(adapter.account.account_id, symbol, qty, avg, realized)
         elif not expected_symbols:
-            # Broker reports no open base-asset positions, so stale local
-            # positions can safely be removed.
             self.positions.clear_account(adapter.account.account_id)
 
     def _hydrate_open_orders(self, account_id: str, broker: str, open_orders: list[dict[str, Any]]) -> None:
@@ -176,7 +189,4 @@ class BrokerRecovery:
             self.lifecycle.recover_open_order(update)
 
     async def recover_all(self) -> list[RecoveryResult]:
-        return [
-            await self.recover_account(account_id)
-            for account_id in self.accounts.accounts
-        ]
+        return [await self.recover_account(account_id) for account_id in self.accounts.accounts]
