@@ -74,6 +74,28 @@ class BrokerRecovery:
                     adapter.account.account_id,
                     adapter,
                 )
+                unresolved = self.pending_orders.list_account(
+                    account_id, adapter.account.broker
+                )
+                if unresolved:
+                    reason = (
+                        f"{len(unresolved)} pending order outcome(s) remain "
+                        "unresolved after broker reconciliation"
+                    )
+                    self.portfolio_state.mark_unconfirmed(
+                        account_id, adapter.account.broker
+                    )
+                    if self.emergency is not None:
+                        await self.emergency.freeze_account(account_id, reason)
+                    self._phase[account_id] = RecoveryPhase.FAILED
+                    return RecoveryResult(
+                        account_id,
+                        balances,
+                        positions,
+                        open_orders,
+                        False,
+                        reason,
+                    )
 
             self.portfolio_state.reconcile(
                 account_id=account_id,
