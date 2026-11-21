@@ -42,6 +42,7 @@ def build_binance_runtime(
     event_bus: EventBus,
     journal: TradingJournal,
     positions: PositionEngine | None = None,
+    market_data: MarketDataStore | None = None,
 ) -> BinanceRuntime:
     mode = settings.trading_mode.upper()
     if mode not in {"PAPER", "TESTNET", "DEMO", "LIVE"}:
@@ -59,7 +60,7 @@ def build_binance_runtime(
     accounts.register(adapter)
 
     lifecycle = OrderLifecycle()
-    market_data = MarketDataStore()
+    market_data = market_data or MarketDataStore()
 
     coordinator = ExecutionCoordinator(
         lifecycle,
@@ -68,8 +69,13 @@ def build_binance_runtime(
         positions=positions or PositionEngine(),
         execution_ledger=ExecutionLedger("data/golden_mind_execution.db"),
     )
-    recovery = BrokerRecovery(accounts, portfolio_state, journal,
-                              positions=coordinator.positions, lifecycle=lifecycle)
+    recovery = BrokerRecovery(
+        accounts,
+        portfolio_state,
+        journal,
+        positions=coordinator.positions,
+        lifecycle=lifecycle,
+    )
     bridge = BinanceExecutionBridge(
         settings.binance_account_id,
         coordinator,
@@ -84,7 +90,13 @@ def build_binance_runtime(
         on_recovered=bridge.mark_reconnected_and_recover,
     )
     return BinanceRuntime(
-        settings.binance_account_id, adapter, bridge, websocket, recovery, coordinator, market_data
+        settings.binance_account_id,
+        adapter,
+        bridge,
+        websocket,
+        recovery,
+        coordinator,
+        market_data,
     )
 
 
