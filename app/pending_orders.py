@@ -21,11 +21,12 @@ class PendingOrderStore:
 
     def __init__(self, path: str = "data/golden_mind_pending_orders.db"):
         self.path = path
+        if path != ":memory:":
+            db_path = Path(path)
+            db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path) if path == ":memory:" else None
         db = self._connect()
         try:
-            if path != ":memory:":
-                Path(path).parent.mkdir(parents=True, exist_ok=True)
             db.execute("""
                 CREATE TABLE IF NOT EXISTS pending_orders (
                     broker TEXT NOT NULL,
