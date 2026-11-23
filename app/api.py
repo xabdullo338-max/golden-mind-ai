@@ -150,6 +150,11 @@ async def token(form_data: OAuth2PasswordRequestForm = Depends()):
     }
 
 
+@app.get("/protected/ping")
+async def protected_ping(_: dict = Depends(require_scope("read"))):
+    return {"status": "ok"}
+
+
 @app.get("/accounts")
 async def list_accounts(_: dict = Depends(require_scope("read"))):
     return {"accounts": accounts.list_accounts()}
