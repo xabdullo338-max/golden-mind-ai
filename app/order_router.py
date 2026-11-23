@@ -68,28 +68,34 @@ class OrderRouter:
         provider = self.market_tick_provider
         if provider is None:
             return None
+
+        import inspect
+
         try:
-            import inspect
             signature = inspect.signature(provider)
-            positional = [
-                p for p in signature.parameters.values()
-                if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-            ]
-            has_varargs = any(
-                p.kind == p.VAR_POSITIONAL
-                for p in signature.parameters.values()
-            )
-            if has_varargs or len(positional) >= 2:
-                return await provider(account_id, symbol)
-            return await provider(symbol)
         except (TypeError, ValueError):
+            # Some extension/callable objects do not expose a signature.
+            # Prefer the current account-aware contract, then fall back to
+            # the legacy symbol-only contract without swallowing provider
+            # exceptions from either call.
             try:
                 return await provider(account_id, symbol)
-            except TypeError as exc:
-                try:
-                    return await provider(symbol)
-                except TypeError:
-                    raise exc
+            except TypeError:
+                return await provider(symbol)
+
+        positional = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.kind
+            in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        has_varargs = any(
+            parameter.kind == parameter.VAR_POSITIONAL
+            for parameter in signature.parameters.values()
+        )
+        if has_varargs or len(positional) >= 2:
+            return await provider(account_id, symbol)
+        return await provider(symbol)
 
     async def _fresh_market_tick(self, account_id: str, symbol: str) -> MarketTick | None:
         """Read cached market data first; the broker provider is acquisition only.
