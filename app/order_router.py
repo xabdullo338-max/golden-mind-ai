@@ -175,7 +175,14 @@ class OrderRouter:
                     (datetime.now(timezone.utc) - timestamp).total_seconds(),
                 )
 
-            if (\n                market_age is not None\n                and self.risk_engine is not None\n                and market_age > self.risk_engine.max_market_data_age_seconds\n            ):\n                raise RuntimeError("market data is stale")\n\n            snapshot = None
+            if (
+                market_age is not None
+                and self.risk_engine is not None
+                and market_age > self.risk_engine.max_market_data_age_seconds
+            ):
+                raise RuntimeError("market data is stale")
+
+            snapshot = None
             total_exposure = 0.0
             symbol_exposure = 0.0
             managed_state = (
