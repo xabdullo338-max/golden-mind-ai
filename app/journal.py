@@ -26,14 +26,23 @@ class TradingJournal:
     """
 
     def __init__(self, path: str = "data/golden_mind.db"):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as db:
+        self.path = Path(path) if path != ":memory:" else None
+        self._db = sqlite3.connect(":memory:") if path == ":memory:" else None
+        if self.path is not None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        db = self._connect()
+        try:
             self._ensure_schema(db)
             db.commit()
+        finally:
+            self._close(db)
 
     def _connect(self):
-        return sqlite3.connect(self.path)
+        return self._db if self._db is not None else sqlite3.connect(self.path)
+
+    def _close(self, db):
+        if self._db is None:
+            db.close()
 
     @staticmethod
     def _table_columns(db: sqlite3.Connection, table: str) -> list[dict[str, Any]]:
@@ -97,7 +106,8 @@ class TradingJournal:
         db.execute("DROP TABLE orders_legacy")
 
     def upsert_order(self, order: JournalOrder) -> None:
-        with self._connect() as db:
+        db = self._connect()
+        try:
             db.execute(
                 """INSERT INTO orders(
                     client_order_id,account_id,broker,symbol,side,quantity,status,broker_order_id
@@ -112,6 +122,8 @@ class TradingJournal:
                 ),
             )
             db.commit()
+        finally:
+            self._close(db)
 
     def get_order(
         self,
@@ -119,7 +131,8 @@ class TradingJournal:
         account_id: str | None = None,
         broker: str | None = None,
     ) -> dict[str, Any] | None:
-        with self._connect() as db:
+        db = self._connect()
+        try:
             db.row_factory = sqlite3.Row
             if account_id and broker:
                 row = db.execute(
@@ -135,13 +148,18 @@ class TradingJournal:
                     raise ValueError("account_id and broker are required when client_order_id is not unique")
                 row = rows[0] if rows else None
             return dict(row) if row else None
+        finally:
+            self._close(db)
 
     def list_open_orders(self) -> list[dict[str, Any]]:
         terminal = ("FILLED", "CANCELED", "REJECTED", "EXPIRED")
-        with self._connect() as db:
+        db = self._connect()
+        try:
             db.row_factory = sqlite3.Row
             rows = db.execute(
                 "SELECT * FROM orders WHERE status NOT IN (?,?,?,?)",
                 terminal,
             ).fetchall()
             return [dict(r) for r in rows]
+        finally:
+            self._close(db)
