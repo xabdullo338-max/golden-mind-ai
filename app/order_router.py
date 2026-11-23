@@ -63,6 +63,34 @@ class OrderRouter:
         snapshot = self.snapshot_provider(account_id)
         return snapshot is not None and self.daily_loss_guard.allowed(snapshot)
 
+    async def _call_market_tick_provider(self, account_id: str, symbol: str) -> Any | None:
+        """Support both account-aware and legacy symbol-only providers."""
+        provider = self.market_tick_provider
+        if provider is None:
+            return None
+        try:
+            import inspect
+            signature = inspect.signature(provider)
+            positional = [
+                p for p in signature.parameters.values()
+                if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+            ]
+            has_varargs = any(
+                p.kind == p.VAR_POSITIONAL
+                for p in signature.parameters.values()
+            )
+            if has_varargs or len(positional) >= 2:
+                return await provider(account_id, symbol)
+            return await provider(symbol)
+        except (TypeError, ValueError):
+            try:
+                return await provider(account_id, symbol)
+            except TypeError as exc:
+                try:
+                    return await provider(symbol)
+                except TypeError:
+                    raise exc
+
     async def _fresh_market_tick(self, account_id: str, symbol: str) -> MarketTick | None:
         """Read cached market data first; the broker provider is acquisition only.
 
@@ -91,7 +119,7 @@ class OrderRouter:
                 )
             return None
 
-        tick = await self.market_tick_provider(account_id, symbol)
+        tick = await self._call_market_tick_provider(account_id, symbol)
         if tick is None:
             if self.market_data_store is not None:
                 return self.market_data_store.require_fresh(
@@ -147,7 +175,7 @@ class OrderRouter:
                     (datetime.now(timezone.utc) - timestamp).total_seconds(),
                 )
 
-            snapshot = None
+            if (\n                market_age is not None\n                and self.risk_engine is not None\n                and market_age > self.risk_engine.max_market_data_age_seconds\n            ):\n                raise RuntimeError("market data is stale")\n\n            snapshot = None
             total_exposure = 0.0
             symbol_exposure = 0.0
             managed_state = (
