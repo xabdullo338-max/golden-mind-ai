@@ -12,11 +12,11 @@ class ExecutionLedger:
     path: str = ":memory:"
 
     def __post_init__(self):
+        if self.path != ":memory:":
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(self.path) if self.path == ":memory:" else None
         db = self._connect()
         try:
-            if self.path != ":memory:":
-                Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS executions (
