@@ -87,13 +87,10 @@ class RiskSnapshotProvider:
             start = daily_state.start_equity
         else:
             start = (self.daily_start_equity or {}).get(state.account_id)
-            # Standalone snapshot providers used by PAPER/TESTNET callers may
-            # not have a durable daily-risk store. In that case, establish the
-            # current reconciled equity as the initial baseline. The production
-            # API supplies DailyRiskStateStore, so LIVE risk checks keep a
-            # durable day-start equity instead of resetting it on each call.
+            # Without an explicit baseline or durable store, risk cannot be
+            # evaluated safely. Never infer the baseline from current equity.
             if start is None:
-                start = equity
+                return None
 
         if start <= 0:
             return None
