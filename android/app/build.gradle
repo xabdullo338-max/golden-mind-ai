@@ -3,7 +3,6 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.goldenmind.ai'
     compileSdk 35
-
     defaultConfig {
         applicationId 'com.goldenmind.ai'
         minSdk 26
