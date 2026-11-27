@@ -62,10 +62,8 @@ class GoldenMindApi(
     private val context: Context,
     private val baseUrl: String = BuildConfig.API_BASE_URL
 ) {
-    private val tokenStore = SecureTokenStore(context)
-
-    private fun request(path: String, method: String = "GET", body: String? = null, contentType: String = "application/json"): String {
-        val connection = (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection)
+NaN(path: String, method: String = "GET", body: String? = null, contentType: String = "application/json"): String {
+        val connection = (URL(getBaseUrl().trimEnd('/') + path).openConnection() as HttpURLConnection)
         connection.requestMethod = method
         connection.connectTimeout = 8000
         connection.readTimeout = 10000
