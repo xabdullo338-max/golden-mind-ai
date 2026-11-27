@@ -85,7 +85,7 @@ strategy_task = None
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global runtime, strategy_task
-    if settings.trading_mode.upper() == "LIVE":
+    if settings.trading_mode.upper() in {"PAPER", "TESTNET", "LIVE"}:
         runtime = build_binance_runtime(
             settings, accounts, portfolio_state, event_bus, journal,
             positions=positions, market_data=market_data,
@@ -135,6 +135,7 @@ async def health():
         "service": "golden-mind-ai",
         "trading_mode": settings.trading_mode.upper(),
         "live_enabled": execution_gate.live_trading_enabled,
+        "accounts": len(accounts.accounts),
     }
 
 
@@ -158,6 +159,31 @@ async def protected_ping(_: dict = Depends(require_scope("read"))):
 @app.get("/accounts")
 async def list_accounts(_: dict = Depends(require_scope("read"))):
     return {"accounts": accounts.list_accounts()}
+
+
+@app.get("/accounts/{account_id}/state")
+async def account_state(account_id: str, _: dict = Depends(require_scope("read"))):
+    managed = accounts.accounts.get(account_id)
+    if managed is None:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    state = portfolio_state.get(account_id)
+    if state is None:
+        return {
+            "account_id": account_id,
+            "broker": managed.adapter.account.broker,
+            "balances": {},
+            "positions": {},
+            "confirmed": False,
+        }
+
+    return {
+        "account_id": state.account_id,
+        "broker": state.broker,
+        "balances": state.balances,
+        "positions": state.positions,
+        "confirmed": state.confirmed,
+    }
 
 
 @app.get("/risk")
