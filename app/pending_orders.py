@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .storage import data_path
+
 
 @dataclass(frozen=True)
 class PendingOrder:
@@ -19,12 +21,12 @@ class PendingOrder:
 class PendingOrderStore:
     """Durable registry for orders whose broker outcome is temporarily unknown."""
 
-    def __init__(self, path: str = "data/golden_mind_pending_orders.db"):
-        self.path = path
-        if path != ":memory:":
+    def __init__(self, path: str | None = None):
+        self.path = path or data_path("golden_mind_pending_orders.db")
+        if self.path != ":memory:":
             db_path = Path(path)
             db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(path) if path == ":memory:" else None
+        self._db = sqlite3.connect(self.path) if self.path == ":memory:" else None
         db = self._connect()
         try:
             db.execute("""
