@@ -69,7 +69,7 @@ class GoldenMindApi(
             val fp = android.os.Build.FINGERPRINT.lowercase()
             val model = android.os.Build.MODEL.lowercase()
             val emulator = fp.contains("generic") || fp.contains("emulator") || model.contains("sdk") || model.contains("emulator")
-            return if (emulator) "http://10.0.2.2:8000" else BuildConfig.API_BASE_URL
+            return if (emulator) "http://10.0.2.2:8000" else "https://golden-mind-ai.vercel.app"
         }
     }
     private val tokenStore = SecureTokenStore(context)
