@@ -62,8 +62,16 @@ class SecureTokenStore(context: Context) {
 
 class GoldenMindApi(
     private val context: Context,
-    private val baseUrl: String = BuildConfig.API_BASE_URL
+    private val baseUrl: String = defaultBaseUrl()
 ) {
+    companion object {
+        private fun defaultBaseUrl(): String {
+            val fp = android.os.Build.FINGERPRINT.lowercase()
+            val model = android.os.Build.MODEL.lowercase()
+            val emulator = fp.contains("generic") || fp.contains("emulator") || model.contains("sdk") || model.contains("emulator")
+            return if (emulator) "http://10.0.2.2:8000" else BuildConfig.API_BASE_URL
+        }
+    }
     private val tokenStore = SecureTokenStore(context)
     private val prefs = context.getSharedPreferences("gmai_config", Context.MODE_PRIVATE)
 
