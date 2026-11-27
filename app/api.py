@@ -23,6 +23,7 @@ from .pending_orders import PendingOrderStore
 from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
 from .live_strategy import LiveStrategyRunner
 from .strategy_engine import TrendMomentumStrategy
+from .storage import data_path
 
 settings = Settings()
 accounts = AccountManager()
@@ -36,7 +37,7 @@ market_data = MarketDataStore()
 pending_orders = PendingOrderStore()
 event_bus = EventBus()
 emergency = EmergencySafetySystem(accounts, kill_switch, event_bus)
-journal = TradingJournal("data/golden_mind_ai.db")
+journal = TradingJournal(data_path("golden_mind_ai.db"))
 
 risk_engine = RiskEngine(
     max_risk_per_trade_pct=settings.max_risk_per_trade_pct,
@@ -53,7 +54,7 @@ risk_engine = RiskEngine(
 )
 
 risk_snapshot_provider = RiskSnapshotProvider(
-    daily_risk_store=DailyRiskStateStore(),
+    daily_risk_store=DailyRiskStateStore(data_path("golden_mind_risk.db")),
     positions=positions,
 )
 
@@ -141,7 +142,10 @@ async def health():
 
 @app.post("/token")
 async def token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate(form_data.username, form_data.password)
+    try:
+        user = authenticate(form_data.username, form_data.password)
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail="Authentication storage is unavailable") from exc
     if user is None:
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     scopes = role_scopes(user["role"])
