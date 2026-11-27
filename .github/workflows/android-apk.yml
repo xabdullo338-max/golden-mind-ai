@@ -33,34 +33,60 @@ jobs:
         working-directory: android
         run: gradle --version
 
-      - name: Validate release signing secrets
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-mind-ai-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Check release signing secrets
+        id: signing
         env:
-          GMAI_KEYSTORE_BASE64: ${{ secrets.GMAI_KEYSTORE_BASE64 }}
-          GMAI_KEYSTORE_PASSWORD: ${{ secrets.GMAI_KEYSTORE_PASSWORD }}
-          GMAI_KEY_ALIAS: ${{ secrets.GMAI_KEY_ALIAS }}
-          GMAI_KEY_PASSWORD: ${{ secrets.GMAI_KEY_PASSWORD }}
+          GMAI_KEYSTORE_BASE64: \${{ secrets.GMAI_KEYSTORE_BASE64 }}
+          GMAI_KEYSTORE_PASSWORD: \${{ secrets.GMAI_KEYSTORE_PASSWORD }}
+          GMAI_KEY_ALIAS: \${{ secrets.GMAI_KEY_ALIAS }}
+          GMAI_KEY_PASSWORD: \${{ secrets.GMAI_KEY_PASSWORD }}
         run: |
-          test -n "$GMAI_KEYSTORE_BASE64" || { echo "Missing GMAI_KEYSTORE_BASE64"; exit 1; }
-          test -n "$GMAI_KEYSTORE_PASSWORD" || { echo "Missing GMAI_KEYSTORE_PASSWORD"; exit 1; }
-          test -n "$GMAI_KEY_ALIAS" || { echo "Missing GMAI_KEY_ALIAS"; exit 1; }
-          test -n "$GMAI_KEY_PASSWORD" || { echo "Missing GMAI_KEY_PASSWORD"; exit 1; }
+          if [ -n "$GMAI_KEYSTORE_BASE64" ] && [ -n "$GMAI_KEYSTORE_PASSWORD" ] && [ -n "$GMAI_KEY_ALIAS" ] && [ -n "$GMAI_KEY_PASSWORD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release signing secrets are not configured; debug APK was built successfully."
+          fi
 
       - name: Prepare release signing
+        if: steps.signing.outputs.available == 'true'
         env:
-          GMAI_KEYSTORE_BASE64: ${{ secrets.GMAI_KEYSTORE_BASE64 }}
+          GMAI_KEYSTORE_BASE64: \${{ secrets.GMAI_KEYSTORE_BASE64 }}
         run: |
           mkdir -p "$RUNNER_TEMP/gmai-signing"
           echo "$GMAI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gmai-signing/golden-mind-ai-release.jks"
           test -s "$RUNNER_TEMP/gmai-signing/golden-mind-ai-release.jks" || { echo "Decoded keystore is empty"; exit 1; }
 
       - name: Build release APK
+        if: steps.signing.outputs.available == 'true'
         working-directory: android
         env:
-          GMAI_KEYSTORE_PATH: ${{ runner.temp }}/gmai-signing/golden-mind-ai-release.jks
-          GMAI_KEYSTORE_PASSWORD: ${{ secrets.GMAI_KEYSTORE_PASSWORD }}
-          GMAI_KEY_ALIAS: ${{ secrets.GMAI_KEY_ALIAS }}
-          GMAI_KEY_PASSWORD: ${{ secrets.GMAI_KEY_PASSWORD }}
+          GMAI_KEYSTORE_PATH: \${{ runner.temp }}/gmai-signing/golden-mind-ai-release.jks
+          GMAI_KEYSTORE_PASSWORD: \${{ secrets.GMAI_KEYSTORE_PASSWORD }}
+          GMAI_KEY_ALIAS: \${{ secrets.GMAI_KEY_ALIAS }}
+          GMAI_KEY_PASSWORD: \${{ secrets.GMAI_KEY_PASSWORD }}
         run: gradle assembleRelease --stacktrace
+
+      - name: Upload release APK
+        if: steps.signing.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-mind-ai-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
