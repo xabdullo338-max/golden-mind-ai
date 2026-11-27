@@ -20,13 +20,13 @@
             android:layout_marginTop="24dp"/>
         <EditText android:id="@+id/baseUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:hint="http://192.168.x.x:8000" android:text="http://10.0.2.2:8000"
-            android:textColor="#FFFFFF" android:hintTextColor="#6B7280" android:inputType="textUri"
+            android:textColor="#FFFFFF" android:textColorHint="#6B7280" android:inputType="textUri"
             android:singleLine="true" android:padding="14dp"/>
         <EditText android:id="@+id/username" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="Username" android:textColor="#FFFFFF" android:hintTextColor="#6B7280"
+            android:hint="Username" android:textColor="#FFFFFF" android:textColorHint="#6B7280"
             android:inputType="text" android:singleLine="true" android:padding="14dp"/>
         <EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="Password" android:textColor="#FFFFFF" android:hintTextColor="#6B7280"
+            android:hint="Password" android:textColor="#FFFFFF" android:textColorHint="#6B7280"
             android:inputType="textPassword" android:singleLine="true" android:padding="14dp"/>
         <Button android:id="@+id/connect" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="CONNECT TO BACKEND" android:layout_marginTop="8dp"/>
