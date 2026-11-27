@@ -35,7 +35,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace -PAPI_BASE_URL=https://golden-mind-ai.vercel.app
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
@@ -77,7 +77,7 @@ jobs:
           GMAI_KEYSTORE_PASSWORD: ${{ secrets.GMAI_KEYSTORE_PASSWORD }}
           GMAI_KEY_ALIAS: ${{ secrets.GMAI_KEY_ALIAS }}
           GMAI_KEY_PASSWORD: ${{ secrets.GMAI_KEY_PASSWORD }}
-        run: gradle assembleRelease --stacktrace
+        run: gradle assembleRelease --stacktrace -PAPI_BASE_URL=https://golden-mind-ai.vercel.app
 
       - name: Upload release APK
         if: steps.signing.outputs.available == 'true'
