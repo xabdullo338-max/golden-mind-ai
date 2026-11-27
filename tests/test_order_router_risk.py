@@ -75,7 +75,7 @@ async def test_router_uses_broker_snapshot_and_exposure():
         execution_gate=ExecutionGate(),
         portfolio_state=state,
         risk_engine=RiskEngine(max_total_exposure_pct=100.0, max_symbol_exposure_pct=50.0),
-        risk_snapshot_provider=RiskSnapshotProvider(),
+        risk_snapshot_provider=RiskSnapshotProvider(daily_start_equity={"A": 1000.0}),
         market_tick_provider=adapter.get_market_tick,
     )
     with pytest.raises(RuntimeError, match="symbol exposure"):
