@@ -120,8 +120,8 @@ class GoldenMindApi(
 
     fun login(username: String, password: String): Boolean {
         val body =
-            "username=\${URLEncoder.encode(username, "UTF-8")}" +
-            "&password=\${URLEncoder.encode(password, "UTF-8")}" +
+            "username=${URLEncoder.encode(username, "UTF-8")}" +
+            "&password=${URLEncoder.encode(password, "UTF-8")}" +
             "&grant_type=password"
 
         val json = JSONObject(
