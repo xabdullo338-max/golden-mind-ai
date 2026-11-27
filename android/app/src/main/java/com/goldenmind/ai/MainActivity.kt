@@ -22,15 +22,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.UUID
 
-private val Bg = Color(0xFF0B0F19)
-private val Card = Color(0xFF121827)
-private val Card2 = Color(0xFF182033)
-private val Txt = Color(0xFFF4F7FB)
-private val Muted = Color(0xFF8D99AD)
+private val Bg = Color(0xFF070B14)
+private val Card = Color(0xFF111827)
+private val Card2 = Color(0xFF1B2740)
+private val Txt = Color(0xFFF8FAFC)
+private val Muted = Color(0xFFA9B4C7)
 private val Green = Color(0xFF31D49B)
 private val Red = Color(0xFFFF6B78)
 private val Amber = Color(0xFFFFC857)
-private val Blue = Color(0xFF5E8BFF)
+private val Blue = Color(0xFF6E8CFF)
+
+private val GmColors = darkColorScheme(
+    background = Bg,
+    surface = Card,
+    surfaceVariant = Card2,
+    primary = Blue,
+    secondary = Purple,
+    onBackground = Txt,
+    onSurface = Txt,
+    onSurfaceVariant = Muted,
+    outline = Color(0xFF47536A)
+)
 
 @Composable
 fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
@@ -42,12 +54,12 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
         Surface(shape = RoundedCornerShape(28.dp), color = Card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.Bolt, null, tint = Blue, modifier = Modifier.size(48.dp))
-                Text("GOLDEN MIND AI", fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Secure backend control center", color = Muted, fontSize = 12.sp)
+                Text("GOLDEN MIND AI", color = Txt, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Secure backend control center", color = Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(20.dp))
-                OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true)
+                OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true)
+                OutlinedTextField(value = password, onValueChange = { password = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Purple, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Purple, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Purple))
                 error?.let { Text(it, color = Red, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = {
@@ -87,10 +99,11 @@ fun GoldenMindApp() {
     var session by remember { mutableStateOf(api.hasSession()) }
     var health by remember { mutableStateOf<ApiHealth?>(null) }
     var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }
-    if (!session) {
-        LoginScreen(api) { session = true }
-        return
-    }
+    MaterialTheme(colorScheme = GmColors) {
+        if (!session) {
+            LoginScreen(api) { session = true }
+            return@MaterialTheme
+        }
     val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     LaunchedEffect(Unit) {
         Thread {
