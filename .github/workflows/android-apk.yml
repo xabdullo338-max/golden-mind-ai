@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -63,7 +63,7 @@ jobs:
         run: gradle assembleRelease --stacktrace
 
       - name: Upload APK
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: golden-mind-ai-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
