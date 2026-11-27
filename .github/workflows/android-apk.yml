@@ -33,13 +33,25 @@ jobs:
         working-directory: android
         run: gradle --version
 
+      - name: Validate release signing secrets
+        env:
+          GMAI_KEYSTORE_BASE64: ${{ secrets.GMAI_KEYSTORE_BASE64 }}
+          GMAI_KEYSTORE_PASSWORD: ${{ secrets.GMAI_KEYSTORE_PASSWORD }}
+          GMAI_KEY_ALIAS: ${{ secrets.GMAI_KEY_ALIAS }}
+          GMAI_KEY_PASSWORD: ${{ secrets.GMAI_KEY_PASSWORD }}
+        run: |
+          test -n "$GMAI_KEYSTORE_BASE64" || { echo "Missing GMAI_KEYSTORE_BASE64"; exit 1; }
+          test -n "$GMAI_KEYSTORE_PASSWORD" || { echo "Missing GMAI_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$GMAI_KEY_ALIAS" || { echo "Missing GMAI_KEY_ALIAS"; exit 1; }
+          test -n "$GMAI_KEY_PASSWORD" || { echo "Missing GMAI_KEY_PASSWORD"; exit 1; }
+
       - name: Prepare release signing
         env:
           GMAI_KEYSTORE_BASE64: ${{ secrets.GMAI_KEYSTORE_BASE64 }}
         run: |
-          test -n "$GMAI_KEYSTORE_BASE64" || { echo "Missing GMAI_KEYSTORE_BASE64 repository secret"; exit 1; }
           mkdir -p "$RUNNER_TEMP/gmai-signing"
           echo "$GMAI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gmai-signing/golden-mind-ai-release.jks"
+          test -s "$RUNNER_TEMP/gmai-signing/golden-mind-ai-release.jks" || { echo "Decoded keystore is empty"; exit 1; }
 
       - name: Build release APK
         working-directory: android
