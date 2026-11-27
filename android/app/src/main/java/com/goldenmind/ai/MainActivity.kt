@@ -284,42 +284,43 @@ fun TradeScreen(padding: PaddingValues, api: GoldenMindApi, accounts: List<Accou
                     Text("MARKET order", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(18.dp))
                     Button(
-                        enabled = !busy && accounts.any { it.enabled } && quantity.toDoubleOrNull()?.let { it > 0 } == true,
                         onClick = {
                             val account = accounts.firstOrNull { it.enabled }
                             val qty = quantity.toDoubleOrNull()
                             if (account == null || qty == null || qty <= 0) {
                                 result = "No enabled account or invalid quantity"
-                                return@Button
+                            } else {
+                                busy = true
+                                result = null
+                                Thread {
+                                    try {
+                                        val order = api.placeMarketOrder(
+                                            account.accountId,
+                                            "GMAI-ANDROID-" + UUID.randomUUID().toString().replace("-", "").take(20),
+                                            symbol,
+                                            side,
+                                            qty
+                                        )
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            busy = false
+                                            result = order.status + ": " + order.side + " " + order.quantity + " " + order.symbol
+                                        }
+                                    } catch (e: Exception) {
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            busy = false
+                                            result = "Order rejected: " + (e.message ?: "unknown error")
+                                        }
+                                    }
+                                }.start()
                             }
-                            busy = true
-                            result = null
-                            Thread {
-                                try {
-                                    val order = api.placeMarketOrder(
-                                        account.accountId,
-                                        "GMAI-ANDROID-" + UUID.randomUUID().toString().replace("-", "").take(20),
-                                        symbol,
-                                        side,
-                                        qty
-                                    )
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        busy = false
-                                        result = order.status + ": " + order.side + " " + order.quantity + " " + order.symbol
-                                    }
-                                } catch (e: Exception) {
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        busy = false
-                                        result = "Order rejected: " + (e.message ?: "unknown error")
-                                    }
-                                }
-                            }.start()
                         },
-                        Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(if (busy) "SENDING…" else "SEND TESTNET/PAPER ORDER")
-                    }
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && accounts.any { it.enabled } && quantity.toDoubleOrNull()?.let { it > 0 } == true,
+                        shape = RoundedCornerShape(14.dp),
+                        content = {
+                            Text(if (busy) "SENDING…" else "SEND TESTNET/PAPER ORDER")
+                        }
+                    )
                     result?.let {
                         Spacer(Modifier.height(12.dp))
                         Text(it, color = if (it.startsWith("Order rejected")) Red else Green, fontSize = 12.sp)
@@ -452,7 +453,6 @@ fun RiskScreen(padding: PaddingValues) {
         }
         item {
             Button(
-                enabled = !busy,
                 onClick = {
                     busy = true
                     message = null
@@ -471,14 +471,16 @@ fun RiskScreen(padding: PaddingValues) {
                         }
                     }.start()
                 },
-                Modifier.fillMaxWidth().height(54.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                enabled = !busy,
                 colors = ButtonDefaults.buttonColors(containerColor = Red),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Warning, null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (busy) "STOPPING…" else "EMERGENCY STOP", fontWeight = FontWeight.ExtraBold)
-            }
+                shape = RoundedCornerShape(16.dp),
+                content = {
+                    Icon(Icons.Default.Warning, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (busy) "STOPPING…" else "EMERGENCY STOP", fontWeight = FontWeight.ExtraBold)
+                }
+            )
         }
         message?.let {
             item { Text(it, color = if (it.startsWith("Emergency stop failed")) Red else Green, fontSize = 12.sp) }
