@@ -15,7 +15,6 @@ class MainActivity : android.app.Activity() {
     private var language = "uz"
     private val gold = android.graphics.Color.rgb(255, 194, 45)
     private val white = android.graphics.Color.WHITE
-    private val gold = android.graphics.Color.rgb(255, 194, 45)
     private val panel = android.graphics.Color.rgb(10, 20, 36)
     private fun tr(key: String): String = when (language) {
         "ru" -> mapOf("signin" to "ВОЙТИ", "username" to "Имя пользователя", "password" to "Пароль", "subtitle" to "AI-система торговли и контроля риска", "backend" to "Безопасный центр управления", "testnet" to "TESTNET / PAPER", "dashboard" to "Главная", "refresh" to "Обновить", "logout" to "ВЫЙТИ", "risk" to "Контроль риска", "bot" to "Торговый бот").getOrDefault(key, key)
@@ -40,7 +39,6 @@ class MainActivity : android.app.Activity() {
         val title = TextView(this).apply {
             text = "◉  GOLDEN MIND AI"
             textSize = 30f
-            setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
             setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
             setTextColor(gold)
             gravity = Gravity.CENTER
@@ -80,6 +78,13 @@ class MainActivity : android.app.Activity() {
             status.text = "Connecting..."
             requestToken(baseUrl.text.toString(), user.text.toString(), pass.text.toString())
         }
+        val logo = ImageView(this).apply {
+            setImageResource(ai.goldenmind.R.drawable.golden_mind_logo)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(-1, 220).apply { setMargins(0, 0, 0, 8) }
+        }
+        root.addView(logo)
         root.addView(title, lp())
         val lang = Spinner(this)
         lang.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("🇺🇿 O‘zbekcha", "🇷🇺 Русский", "🇬🇧 English"))
@@ -126,6 +131,12 @@ class MainActivity : android.app.Activity() {
         val logout = Button(this).apply { text = tr("logout") }
         refresh.setOnClickListener { loadDashboard(api) }
         logout.setOnClickListener { token = null; showLogin() }
+        val logo = ImageView(this).apply {
+            setImageResource(ai.goldenmind.R.drawable.golden_mind_logo)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            layoutParams = LinearLayout.LayoutParams(-1, 180).apply { setMargins(0, 0, 0, 4) }
+        }
+        root.addView(logo)
         root.addView(title, lp())
         root.addView(badge, lp())
         root.addView(space())
