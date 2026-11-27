@@ -24,7 +24,7 @@ class PendingOrderStore:
     def __init__(self, path: str | None = None):
         self.path = path or data_path("golden_mind_pending_orders.db")
         if self.path != ":memory:":
-            db_path = Path(path)
+            db_path = Path(self.path)
             db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(self.path) if self.path == ":memory:" else None
         db = self._connect()
