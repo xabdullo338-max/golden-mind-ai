@@ -59,7 +59,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                 Text("GOLDEN MIND AI", color = Txt, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Secure backend control center", color = Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(20.dp))
-                OutlinedTextField(value = serverUrl, onValueChange = { serverUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Backend URL") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
+                OutlinedTextField(value = serverUrl, onValueChange = { serverUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Backend URL") }, placeholder = { Text("http://192.168.x.x:8000") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
                 Spacer(Modifier.height(10.dp))
@@ -67,7 +67,8 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                 error?.let { Text(it, color = Red, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = {
-                    if (serverUrl.isBlank()) { error = "Backend URLni kiriting."; return@Button }
+                    if (serverUrl.isBlank()) { error = "Telefon uchun backend URLni kiriting. Masalan: http://192.168.1.100:8000"; return@Button }
+                    if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) { error = "Backend URL http:// yoki https:// bilan boshlanishi kerak."; return@Button }
                     api.setBaseUrl(serverUrl)
                     busy = true
                     Thread {
