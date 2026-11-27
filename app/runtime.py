@@ -18,6 +18,7 @@ from .position_engine import PositionEngine
 from .recovery import BrokerRecovery
 from .kill_switch import EmergencySafetySystem
 from .pending_orders import PendingOrderStore
+from .storage import data_path
 
 
 @dataclass
@@ -72,7 +73,7 @@ def build_binance_runtime(
         journal,
         event_bus,
         positions=positions or PositionEngine(),
-        execution_ledger=ExecutionLedger("data/golden_mind_execution.db"),
+        execution_ledger=ExecutionLedger(data_path("golden_mind_execution.db")),
     )
     recovery = BrokerRecovery(
         accounts,
