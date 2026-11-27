@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.UUID
 
 private val Bg = Color(0xFF0B0F19)
 private val Card = Color(0xFF121827)
@@ -83,7 +84,6 @@ fun GoldenMindApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val api = remember { GoldenMindApi(context) }
     var selected by remember { mutableIntStateOf(0) }
-    var trading by remember { mutableStateOf(false) }
     var session by remember { mutableStateOf(api.hasSession()) }
     var health by remember { mutableStateOf<ApiHealth?>(null) }
     var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }
@@ -134,7 +134,7 @@ fun GoldenMindApp() {
         ) { padding ->
             when (selected) {
                 0 -> DashboardScreen(health, accounts, false, null, padding, {})
-                1 -> TradeScreen(padding)
+                1 -> TradeScreen(padding, api, accounts)
                 2 -> RobotScreen(padding)
                 3 -> AccountsScreen(accounts, api, padding)
                 else -> RiskScreen(padding)
@@ -231,13 +231,28 @@ fun StatusLine(label: String, value: String, color: Color) {
 }
 
 @Composable
-fun TradeScreen(padding: PaddingValues) {
+fun TradeScreen(padding: PaddingValues, api: GoldenMindApi, accounts: List<AccountInfo>) {
     var side by remember { mutableStateOf("BUY") }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    var symbol by remember { mutableStateOf("BTCUSDT") }
+    var quantity by remember { mutableStateOf("0.001") }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         item { Header("Trade", "Manual order console") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("BTC/USDT", "ETH/USDT").forEach { pair -> FilterChip(selected = pair == "BTC/USDT", onClick = {}, label = { Text(pair) }) }
+                listOf("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT").forEach { pair ->
+                    FilterChip(
+                        selected = symbol == pair,
+                        onClick = { symbol = pair },
+                        label = { Text(pair) }
+                    )
+                }
             }
         }
         item {
@@ -246,22 +261,81 @@ fun TradeScreen(padding: PaddingValues) {
                     Text("Order side", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button({ side = "BUY" }, Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (side == "BUY") Green else Card2)) { Text("BUY") }
-                        Button({ side = "SELL" }, Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (side == "SELL") Red else Card2)) { Text("SELL") }
+                        Button(
+                            { side = "BUY" },
+                            Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (side == "BUY") Green else Card2)
+                        ) { Text("BUY") }
+                        Button(
+                            { side = "SELL" },
+                            Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (side == "SELL") Red else Card2)
+                        ) { Text("SELL") }
                     }
                     Spacer(Modifier.height(18.dp))
-                    OutlinedTextField("0.001", {}, Modifier.fillMaxWidth(), label = { Text("Quantity") })
+                    OutlinedTextField(
+                        quantity,
+                        { quantity = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("Quantity") },
+                        singleLine = true
+                    )
                     Spacer(Modifier.height(12.dp))
-                    OutlinedTextField("Market", {}, Modifier.fillMaxWidth(), label = { Text("Order type") })
+                    Text("MARKET order", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(18.dp))
-                    Button({}, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("Preview $side order") }
+                    Button(
+                        enabled = !busy && accounts.any { it.enabled } && quantity.toDoubleOrNull()?.let { it > 0 } == true,
+                        onClick = {
+                            val account = accounts.firstOrNull { it.enabled }
+                            val qty = quantity.toDoubleOrNull()
+                            if (account == null || qty == null || qty <= 0) {
+                                result = "No enabled account or invalid quantity"
+                                return@Button
+                            }
+                            busy = true
+                            result = null
+                            Thread {
+                                try {
+                                    val order = api.placeMarketOrder(
+                                        account.accountId,
+                                        "GMAI-ANDROID-" + UUID.randomUUID().toString().replace("-", "").take(20),
+                                        symbol,
+                                        side,
+                                        qty
+                                    )
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        busy = false
+                                        result = order.status + ": " + order.side + " " + order.quantity + " " + order.symbol
+                                    }
+                                } catch (e: Exception) {
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        busy = false
+                                        result = "Order rejected: " + (e.message ?: "unknown error")
+                                    }
+                                }
+                            }.start()
+                        },
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(if (busy) "SENDING…" else "SEND TESTNET/PAPER ORDER")
+                    }
+                    result?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, color = if (it.startsWith("Order rejected")) Red else Green, fontSize = 12.sp)
+                    }
                 }
             }
         }
-        item { Text("Orders are routed through the same risk and execution gates as the backend.", color = Muted, fontSize = 12.sp) }
+        item {
+            Text(
+                "Orders are routed through the backend risk and execution gates. LIVE remains disabled by default.",
+                color = Muted,
+                fontSize = 12.sp
+            )
+        }
     }
 }
-
 @Composable
 fun RobotScreen(padding: PaddingValues) {
     var enabled by remember { mutableStateOf(false) }
