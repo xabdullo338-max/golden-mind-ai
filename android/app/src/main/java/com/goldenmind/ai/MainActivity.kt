@@ -31,6 +31,7 @@ private val Green = Color(0xFF31D49B)
 private val Red = Color(0xFFFF6B78)
 private val Amber = Color(0xFFFFC857)
 private val Blue = Color(0xFF6E8CFF)
+private val Purple = Color(0xFF8B6CFF)
 
 private val GmColors = darkColorScheme(
     background = Bg,
@@ -50,6 +51,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var serverUrl by remember { mutableStateOf(api.getBaseUrl()) }
     Box(Modifier.fillMaxSize().background(Bg).padding(24.dp), contentAlignment = Alignment.Center) {
         Surface(shape = RoundedCornerShape(28.dp), color = Card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -57,12 +59,16 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                 Text("GOLDEN MIND AI", color = Txt, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Secure backend control center", color = Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(20.dp))
+                OutlinedTextField(value = serverUrl, onValueChange = { serverUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Backend URL") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
+                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(value = username, onValueChange = { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(value = password, onValueChange = { password = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Purple, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Purple, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Purple))
                 error?.let { Text(it, color = Red, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp)) }
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = {
+                    if (serverUrl.isBlank()) { error = "Backend URLni kiriting."; return@Button }
+                    api.setBaseUrl(serverUrl)
                     busy = true
                     Thread {
                         try {
@@ -76,7 +82,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                     Text(if (busy) "CONNECTING…" else "SIGN IN", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("Broker API secrets are not stored in the APK.", color = Muted, fontSize = 10.sp)
+                Text("Testnet / Paper • API secrets are server-side", color = Muted, fontSize = 10.sp)
             }
         }
     }
