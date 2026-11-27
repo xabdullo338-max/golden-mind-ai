@@ -79,7 +79,7 @@ class MainActivity : android.app.Activity() {
             requestToken(baseUrl.text.toString(), user.text.toString(), pass.text.toString())
         }
         val logo = ImageView(this).apply {
-            setImageResource(ai.goldenmind.R.drawable.golden_mind_logo)
+            setImageResource(com.goldenmind.ai.R.drawable.golden_mind_logo)
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             layoutParams = LinearLayout.LayoutParams(-1, 220).apply { setMargins(0, 0, 0, 8) }
@@ -132,7 +132,7 @@ class MainActivity : android.app.Activity() {
         refresh.setOnClickListener { loadDashboard(api) }
         logout.setOnClickListener { token = null; showLogin() }
         val logo = ImageView(this).apply {
-            setImageResource(ai.goldenmind.R.drawable.golden_mind_logo)
+            setImageResource(com.goldenmind.ai.R.drawable.golden_mind_logo)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             layoutParams = LinearLayout.LayoutParams(-1, 180).apply { setMargins(0, 0, 0, 4) }
         }
