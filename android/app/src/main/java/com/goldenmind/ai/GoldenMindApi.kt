@@ -141,7 +141,7 @@ class GoldenMindApi(
             put("order_type", "MARKET")
             if (price != null) put("price", price)
         }
-        val json = JSONObject(request("/accounts/${id}/orders", "POST", body.toString()))
+        val json = JSONObject(request("/orders/test", "POST", body.toString()))
         return OrderResult(json.optString("status"), json.optString("symbol"), json.optString("side"), json.optDouble("executedQty", quantity), if (json.has("price")) json.optDouble("price") else null)
     }
 
