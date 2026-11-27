@@ -2,6 +2,7 @@ package ai.goldenmind
 
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.widget.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -13,6 +14,7 @@ class MainActivity : android.app.Activity() {
     private var token: String? = null
     private var language = "uz"
     private val gold = android.graphics.Color.rgb(255, 194, 45)
+    private val white = android.graphics.Color.WHITE
     private fun tr(key: String): String = when (language) {
         "ru" -> mapOf("signin" to "ВОЙТИ", "username" to "Имя пользователя", "password" to "Пароль", "subtitle" to "AI-система торговли и контроля риска", "backend" to "Безопасный центр управления", "testnet" to "TESTNET / PAPER", "dashboard" to "Главная", "refresh" to "Обновить", "logout" to "ВЫЙТИ", "risk" to "Контроль риска", "bot" to "Торговый бот").getOrDefault(key, key)
         "en" -> mapOf("signin" to "SIGN IN", "username" to "Username", "password" to "Password", "subtitle" to "AI Trading & Risk Control System", "backend" to "Secure Backend Control Center", "testnet" to "TESTNET / PAPER", "dashboard" to "Dashboard", "refresh" to "Refresh", "logout" to "SIGN OUT", "risk" to "Risk Control", "bot" to "Trading Bot").getOrDefault(key, key)
@@ -37,7 +39,7 @@ class MainActivity : android.app.Activity() {
             text = "GOLDEN MIND AI"
             textSize = 30f
             setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
-            setTextColor(white)
+            setTextColor(android.graphics.Color.WHITE)
             gravity = Gravity.CENTER
         }
         val subtitle = TextView(this).apply {
