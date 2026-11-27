@@ -104,11 +104,19 @@ class GoldenMindApi(
     fun logout() = tokenStore.clear()
 
     fun accounts(): List<AccountInfo> {
-        val arr = JSONArray(request("/accounts"))
+        val root = JSONObject(request("/accounts"))
+        val arr = root.optJSONArray("accounts") ?: JSONArray()
         return buildList {
             for (i in 0 until arr.length()) {
                 val item = arr.getJSONObject(i)
-                add(AccountInfo(item.optString("account_id"), item.optString("broker"), item.optString("mode"), item.optBoolean("enabled")))
+                add(
+                    AccountInfo(
+                        item.optString("account_id"),
+                        item.optString("broker"),
+                        item.optString("mode"),
+                        item.optBoolean("enabled")
+                    )
+                )
             }
         }
     }
