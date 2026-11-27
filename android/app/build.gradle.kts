@@ -6,7 +6,7 @@ plugins {
 android {
     namespace = "com.goldenmind.ai"
     compileSdk = 35
-    val apiBaseUrl = project.findProperty("API_BASE_URL")?.toString() ?: "http://10.0.2.2:8000"
+    val apiBaseUrl = project.findProperty("API_BASE_URL")?.toString() ?: ""
     defaultConfig {
         applicationId = "ai.goldenmind"
         minSdk = 26
