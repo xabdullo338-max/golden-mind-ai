@@ -426,29 +426,62 @@ fun AccountsScreen(accounts: List<AccountInfo>, api: GoldenMindApi, padding: Pad
 
 @Composable
 fun RiskScreen(padding: PaddingValues) {
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val api = remember { GoldenMindApi(context) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         item { Header("Risk Center", "Protection before profit") }
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Daily loss limit", color = Muted, fontSize = 12.sp)
-                    Text("3.00%", color = Txt, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(10.dp))
-                    LinearProgressIndicator(progress = { 0.21f }, Modifier.fillMaxWidth())
+                    Text("Configured limits", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(8.dp))
-                    Text("Current drawdown: 0.63%", color = Green, fontSize = 12.sp)
-                    Spacer(Modifier.height(18.dp))
+                    SettingRow("Daily loss limit", "3.00%")
                     SettingRow("Risk / trade", "0.25%")
                     SettingRow("Max positions", "3")
-                    SettingRow("Kill switch", "ARMED")
-                    SettingRow("State reconciliation", "REQUIRED")
+                    SettingRow("Kill switch", "Backend protected")
+                    SettingRow("State reconciliation", "Required before execution")
                 }
             }
         }
         item {
-            Button({}, Modifier.fillMaxWidth().height(54.dp), colors = ButtonDefaults.buttonColors(containerColor = Red), shape = RoundedCornerShape(16.dp)) {
-                Icon(Icons.Default.Warning, null); Spacer(Modifier.width(8.dp)); Text("EMERGENCY STOP", fontWeight = FontWeight.ExtraBold)
+            Button(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    message = null
+                    Thread {
+                        try {
+                            api.emergencyStop()
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                busy = false
+                                message = "Emergency stop activated."
+                            }
+                        } catch (e: Exception) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                busy = false
+                                message = "Emergency stop failed: " + (e.message ?: "unknown error")
+                            }
+                        }
+                    }.start()
+                },
+                Modifier.fillMaxWidth().height(54.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Red),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Warning, null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (busy) "STOPPING…" else "EMERGENCY STOP", fontWeight = FontWeight.ExtraBold)
             }
+        }
+        message?.let {
+            item { Text(it, color = if (it.startsWith("Emergency stop failed")) Red else Green, fontSize = 12.sp) }
         }
     }
 }
