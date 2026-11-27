@@ -11,13 +11,26 @@ android {
         applicationId = "ai.goldenmind"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 5
+        versionName = "1.1.2"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("GMAI_KEYSTORE_PATH")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("GMAI_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("GMAI_KEY_ALIAS")
+                keyPassword = System.getenv("GMAI_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
