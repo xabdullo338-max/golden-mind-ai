@@ -11,6 +11,13 @@ import java.util.concurrent.Executors
 class MainActivity : android.app.Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private var token: String? = null
+    private var language = "uz"
+    private val gold = android.graphics.Color.rgb(255, 194, 45)
+    private fun tr(key: String): String = when (language) {
+        "ru" -> mapOf("signin" to "ВОЙТИ", "username" to "Имя пользователя", "password" to "Пароль", "subtitle" to "AI-система торговли и контроля риска", "backend" to "Безопасный центр управления", "testnet" to "TESTNET / PAPER", "dashboard" to "Главная", "refresh" to "Обновить", "logout" to "ВЫЙТИ", "risk" to "Контроль риска", "bot" to "Торговый бот").getOrDefault(key, key)
+        "en" -> mapOf("signin" to "SIGN IN", "username" to "Username", "password" to "Password", "subtitle" to "AI Trading & Risk Control System", "backend" to "Secure Backend Control Center", "testnet" to "TESTNET / PAPER", "dashboard" to "Dashboard", "refresh" to "Refresh", "logout" to "SIGN OUT", "risk" to "Risk Control", "bot" to "Trading Bot").getOrDefault(key, key)
+        else -> mapOf("signin" to "KIRISH", "username" to "Foydalanuvchi nomi", "password" to "Parol", "subtitle" to "AI savdo va xavfsizlik boshqaruv tizimi", "backend" to "Xavfsiz backend boshqaruv markazi", "testnet" to "TESTNET / PAPER", "dashboard" to "Bosh sahifa", "refresh" to "Yangilash", "logout" to "CHIQISH", "risk" to "Risk boshqaruvi", "bot" to "Savdo boti").getOrDefault(key, key)
+    }
     private lateinit var baseUrl: EditText
     private lateinit var status: TextView
     private lateinit var content: LinearLayout
@@ -24,41 +31,42 @@ class MainActivity : android.app.Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 32, 28, 28)
-            setBackgroundColor(android.graphics.Color.rgb(11, 16, 32))
+            setBackgroundColor(android.graphics.Color.rgb(7, 13, 27))
         }
         val title = TextView(this).apply {
             text = "GOLDEN MIND AI"
             textSize = 30f
-            setTextColor(android.graphics.Color.WHITE)
+            setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            setTextColor(white)
             gravity = Gravity.CENTER
         }
         val subtitle = TextView(this).apply {
-            text = "Safety-first trading control • TESTNET / PAPER"
+            text = tr("subtitle")
             textSize = 14f
             setTextColor(android.graphics.Color.LTGRAY)
             gravity = Gravity.CENTER
         }
         baseUrl = EditText(this).apply {
-            hint = "API URL (e.g. http://10.0.2.2:8000)"
+            hint = "https://golden-mind-ai.vercel.app"
             setSingleLine()
-            setText("http://10.0.2.2:8000")
+            setText("https://golden-mind-ai.vercel.app")
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.GRAY)
         }
         val user = EditText(this).apply {
-            hint = "Username"
+            hint = tr("username")
             setSingleLine()
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.GRAY)
         }
         val pass = EditText(this).apply {
-            hint = "Password"
+            hint = tr("password")
             inputType = 0x81
             setSingleLine()
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.GRAY)
         }
-        val login = Button(this).apply { text = "SIGN IN" }
+        val login = Button(this).apply { text = tr("signin") }
         status = TextView(this).apply {
             setTextColor(android.graphics.Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -68,12 +76,24 @@ class MainActivity : android.app.Activity() {
             requestToken(baseUrl.text.toString(), user.text.toString(), pass.text.toString())
         }
         root.addView(title, lp())
+        val lang = Spinner(this)
+        lang.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("🇺🇿 O‘zbekcha", "🇷🇺 Русский", "🇬🇧 English"))
+        lang.setSelection(if (language == "uz") 0 else if (language == "ru") 1 else 2)
+        lang.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val nl = listOf("uz", "ru", "en")[position]
+                if (nl != language) { language = nl; showLogin() }
+            }
+        })
+        root.addView(lang, lp())
         root.addView(subtitle, lp())
         root.addView(space())
         root.addView(baseUrl, lp())
         root.addView(user, lp())
         root.addView(pass, lp())
         root.addView(login, lp())
+        root.addView(TextView(this).apply { text = "🔒 HTTPS • 🧪 " + tr("testnet"); textSize = 12f; setTextColor(android.graphics.Color.rgb(80,220,130)); gravity = Gravity.CENTER }, lp())
         root.addView(status, lp())
         setContentView(root)
     }
@@ -85,19 +105,19 @@ class MainActivity : android.app.Activity() {
             setBackgroundColor(android.graphics.Color.rgb(11, 16, 32))
         }
         val title = TextView(this).apply {
-            text = "GOLDEN MIND AI • TESTNET"
+            text = "GOLDEN MIND AI • " + tr("testnet")
             textSize = 22f
             setTextColor(android.graphics.Color.WHITE)
         }
         val badge = TextView(this).apply {
-            text = "LIVE TRADING DISABLED BY DEFAULT"
+            text = "🛡 " + tr("risk") + " • TESTNET"
             setTextColor(android.graphics.Color.rgb(56, 189, 248))
             textSize = 12f
         }
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         status = TextView(this).apply { setTextColor(android.graphics.Color.LTGRAY) }
-        val refresh = Button(this).apply { text = "REFRESH ACCOUNT / HEALTH" }
-        val logout = Button(this).apply { text = "SIGN OUT" }
+        val refresh = Button(this).apply { text = tr("refresh") }
+        val logout = Button(this).apply { text = tr("logout") }
         refresh.setOnClickListener { loadDashboard(api) }
         logout.setOnClickListener { token = null; showLogin() }
         root.addView(title, lp())
