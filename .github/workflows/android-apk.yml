@@ -16,16 +16,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "8.10.2"
 
@@ -49,11 +49,9 @@ jobs:
           GMAI_KEY_ALIAS: ${{ secrets.GMAI_KEY_ALIAS }}
           GMAI_KEY_PASSWORD: ${{ secrets.GMAI_KEY_PASSWORD }}
         run: gradle assembleRelease --stacktrace
-        working-directory: android
-        run: gradle assembleRelease --stacktrace
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: golden-mind-ai-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
