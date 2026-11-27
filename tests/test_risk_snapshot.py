@@ -9,7 +9,7 @@ def test_risk_snapshot_values_reconciled_assets():
         {"USDT": 700.0, "BTC": 0.01},
         [{"asset": "BTC", "quantity": 0.01}],
     )
-    snap = RiskSnapshotProvider().build(state.get("A"), prices={"BTCUSDT": 30000.0})
+    snap = RiskSnapshotProvider(daily_start_equity={"A": 1000.0}).build(state.get("A"), prices={"BTCUSDT": 30000.0})
     assert snap is not None
     assert snap.equity == 1000.0
     assert snap.cash == 700.0
