@@ -15,6 +15,8 @@ class MainActivity : android.app.Activity() {
     private var language = "uz"
     private val gold = android.graphics.Color.rgb(255, 194, 45)
     private val white = android.graphics.Color.WHITE
+    private val gold = android.graphics.Color.rgb(255, 194, 45)
+    private val panel = android.graphics.Color.rgb(10, 20, 36)
     private fun tr(key: String): String = when (language) {
         "ru" -> mapOf("signin" to "ВОЙТИ", "username" to "Имя пользователя", "password" to "Пароль", "subtitle" to "AI-система торговли и контроля риска", "backend" to "Безопасный центр управления", "testnet" to "TESTNET / PAPER", "dashboard" to "Главная", "refresh" to "Обновить", "logout" to "ВЫЙТИ", "risk" to "Контроль риска", "bot" to "Торговый бот").getOrDefault(key, key)
         "en" -> mapOf("signin" to "SIGN IN", "username" to "Username", "password" to "Password", "subtitle" to "AI Trading & Risk Control System", "backend" to "Secure Backend Control Center", "testnet" to "TESTNET / PAPER", "dashboard" to "Dashboard", "refresh" to "Refresh", "logout" to "SIGN OUT", "risk" to "Risk Control", "bot" to "Trading Bot").getOrDefault(key, key)
@@ -33,13 +35,14 @@ class MainActivity : android.app.Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 32, 28, 28)
-            setBackgroundColor(android.graphics.Color.rgb(7, 13, 27))
+            setBackgroundColor(android.graphics.Color.rgb(3, 9, 20))
         }
         val title = TextView(this).apply {
-            text = "GOLDEN MIND AI"
+            text = "◉  GOLDEN MIND AI"
             textSize = 30f
             setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
-            setTextColor(android.graphics.Color.WHITE)
+            setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            setTextColor(gold)
             gravity = Gravity.CENTER
         }
         val subtitle = TextView(this).apply {
@@ -52,7 +55,7 @@ class MainActivity : android.app.Activity() {
             hint = "https://golden-mind-ai.vercel.app"
             setSingleLine()
             setText("https://golden-mind-ai.vercel.app")
-            setTextColor(android.graphics.Color.WHITE)
+            setTextColor(gold)
             setHintTextColor(android.graphics.Color.GRAY)
         }
         val user = EditText(this).apply {
@@ -68,7 +71,7 @@ class MainActivity : android.app.Activity() {
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.GRAY)
         }
-        val login = Button(this).apply { text = tr("signin") }
+        val login = Button(this).apply { text = tr("signin"); setTextColor(android.graphics.Color.rgb(30,25,5)); setBackgroundColor(gold); minHeight = 54 }
         status = TextView(this).apply {
             setTextColor(android.graphics.Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -104,21 +107,22 @@ class MainActivity : android.app.Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(22, 26, 22, 26)
-            setBackgroundColor(android.graphics.Color.rgb(11, 16, 32))
+            setBackgroundColor(android.graphics.Color.rgb(3, 9, 20))
         }
         val title = TextView(this).apply {
-            text = "GOLDEN MIND AI • " + tr("testnet")
-            textSize = 22f
+            text = "GOLDEN MIND AI  •  " + tr("testnet")
+            textSize = 23f
+            setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
             setTextColor(android.graphics.Color.WHITE)
         }
         val badge = TextView(this).apply {
-            text = "🛡 " + tr("risk") + " • TESTNET"
-            setTextColor(android.graphics.Color.rgb(56, 189, 248))
+            text = "🛡 " + tr("risk") + "  •  TESTNET  •  ONLINE"
+            setTextColor(gold)
             textSize = 12f
         }
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         status = TextView(this).apply { setTextColor(android.graphics.Color.LTGRAY) }
-        val refresh = Button(this).apply { text = tr("refresh") }
+        val refresh = Button(this).apply { text = tr("refresh"); setTextColor(android.graphics.Color.rgb(30,25,5)); setBackgroundColor(gold) }
         val logout = Button(this).apply { text = tr("logout") }
         refresh.setOnClickListener { loadDashboard(api) }
         logout.setOnClickListener { token = null; showLogin() }
