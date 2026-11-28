@@ -58,6 +58,13 @@ def current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
     return payload
 
 
+
+def decode_access_token(token: str) -> dict:
+    payload = jwt.decode(token, _secret(), algorithms=["HS256"])
+    if not payload.get("sub"):
+        raise InvalidTokenError("missing subject")
+    return payload
+
 def require_scope(scope: str):
     def dependency(user: Annotated[dict, Depends(current_user)]) -> dict:
         if scope not in user.get("scopes", []):
