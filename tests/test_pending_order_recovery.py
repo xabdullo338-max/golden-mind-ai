@@ -290,3 +290,53 @@ async def test_frozen_account_blocks_new_order_after_unresolved_recovery():
         await router.route(
             "A", OrderRequest("new-after-freeze", "BTCUSDT", OrderSide.BUY, 0.01)
         )
+
+
+@pytest.mark.asyncio
+async def test_unknown_order_recovers_partial_then_final_fill_without_resubmission():
+    adapter = TimeoutAdapter("PARTIALLY_FILLED")
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    from app.order_lifecycle import OrderUpdate
+
+    pending.mark(PendingOrder("BINANCE", "A", "partial-1", "BTCUSDT", "BUY", 0.01))
+    lifecycle.apply(OrderUpdate(
+        broker="BINANCE", account_id="A", client_order_id="partial-1",
+        status=OrderStatus.UNKNOWN, symbol="BTCUSDT", side="BUY",
+        original_quantity=0.01,
+    ))
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    positions = PositionEngine()
+    coordinator = ExecutionCoordinator(
+        lifecycle,
+        TradingJournal(":memory:"),
+        EventBus(),
+        positions=positions,
+        execution_ledger=ExecutionLedger(":memory:"),
+    )
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=lifecycle, pending_orders=pending,
+        execution_coordinator=coordinator,
+    )
+
+    first = await recovery.recover_account("A")
+    assert first.confirmed is False
+    assert lifecycle.get("partial-1", "A", "BINANCE").status is OrderStatus.PARTIALLY_FILLED
+    assert lifecycle.get("partial-1", "A", "BINANCE").executed_quantity == pytest.approx(0.0)
+    assert pending.list_account("A", "BINANCE") != []
+
+    adapter.outcome = "FILLED"
+    second = await recovery.recover_account("A")
+    assert second.confirmed is True
+    recovered = lifecycle.get("partial-1", "A", "BINANCE")
+    assert recovered.status is OrderStatus.FILLED
+    assert recovered.executed_quantity == pytest.approx(0.01)
+    assert pending.list_account("A", "BINANCE") == []
+    position = positions.get("A", "BTCUSDT")
+    assert position.quantity == pytest.approx(0.01)
