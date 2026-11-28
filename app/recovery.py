@@ -268,8 +268,10 @@ class BrokerRecovery:
                 symbol=item.symbol,
                 executed_quantity=executed,
                 average_price=avg_price,
-                broker_order_id=str(
-                    broker_order.get("orderId", broker_order.get("broker_order_id"))
+                broker_order_id=(
+                    str(broker_order.get("orderId", broker_order.get("broker_order_id")))
+                    if broker_order.get("orderId", broker_order.get("broker_order_id")) is not None
+                    else None
                 ),
                 side=item.side,
                 original_quantity=original,
