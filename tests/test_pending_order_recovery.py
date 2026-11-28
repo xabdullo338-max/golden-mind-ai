@@ -423,6 +423,20 @@ async def test_ibkr_recovery_and_live_fill_replay_do_not_double_count():
     adapter.get_positions = fake_positions
     adapter.hydrate_positions = fake_hydrate
 
+    async def fake_order_lookup(symbol, client_order_id):
+        return {
+            "status": "FILLED",
+            "symbol": symbol,
+            "side": "BUY",
+            "origQty": "1.0",
+            "executedQty": "1.0",
+            "avgPrice": "211.0",
+            "orderId": "9004",
+            "clientOrderId": client_order_id,
+        }
+
+    adapter.get_order_by_client_id = fake_order_lookup
+
     lifecycle = OrderLifecycle()
     pending = PendingOrderStore(":memory:")
     from app.pending_orders import PendingOrder
