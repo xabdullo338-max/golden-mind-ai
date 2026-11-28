@@ -22,7 +22,7 @@ from .position_engine import PositionEngine
 from .pending_orders import PendingOrderStore
 from .runtime import build_binance_runtime, start_binance_runtime, stop_binance_runtime
 from .live_strategy import LiveStrategyRunner
-from .strategy_engine import TrendMomentumStrategy
+from .strategy_engine import AdaptiveEnsembleStrategy, Candle
 from .storage import data_path
 
 settings = Settings()
@@ -267,6 +267,37 @@ async def orders_history(_: dict = Depends(require_scope("read"))):
         }
         for item in lifecycle.snapshot()
     ] if lifecycle is not None else []}
+
+
+@app.get("/strategy/signal")
+async def strategy_signal(symbol: str = "BTCUSDT", _: dict = Depends(require_scope("read"))):
+    managed = accounts.accounts.get(settings.binance_account_id)
+    if managed is None:
+        raise HTTPException(status_code=404, detail="Binance account is not registered")
+    rows = await managed.adapter.get_candles(symbol.upper(), "1m", 60)
+    if len(rows) < 35:
+        raise HTTPException(status_code=503, detail="Not enough candles for strategy evaluation")
+    decision = strategy_engine.evaluate([Candle(**row) for row in rows])
+    indicators = decision.indicators
+    return {
+        "symbol": symbol.upper(),
+        "signal": decision.signal.value,
+        "confidence": decision.confidence,
+        "regime": decision.regime.value,
+        "model_score": decision.model_score,
+        "stop_price": decision.stop_price,
+        "take_profit_price": decision.take_profit_price,
+        "reason": decision.reason,
+        "indicators": {
+            "ema_fast": indicators.ema_fast if indicators else None,
+            "ema_slow": indicators.ema_slow if indicators else None,
+            "rsi": indicators.rsi if indicators else None,
+            "atr_pct": indicators.atr_pct if indicators else None,
+            "adx": indicators.adx if indicators else None,
+            "volume_ratio": indicators.volume_ratio if indicators else None,
+            "momentum_pct": indicators.momentum_pct if indicators else None,
+        },
+    }
 
 @app.get("/risk")
 async def risk(_: dict = Depends(require_scope("read"))):
