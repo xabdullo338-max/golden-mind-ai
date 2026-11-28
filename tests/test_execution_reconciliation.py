@@ -259,3 +259,100 @@ async def test_partial_then_final_and_replayed_partial_apply_exact_delta():
     assert coordinator.execution_ledger.delta(
         "o-delta", 1.0, account_id="A", broker="BINANCE"
     ) == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_ibkr_partial_then_filled_replay_applies_exact_delta():
+    from app.brokers.ibkr import IBKRAdapter
+
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+    coordinator = ExecutionCoordinator(
+        lifecycle=OrderLifecycle(),
+        journal=TradingJournal(":memory:"),
+        event_bus=EventBus(),
+        positions=PositionEngine(),
+        execution_ledger=ExecutionLedger(),
+    )
+    await coordinator.submitted(
+        "IBKR-01", "IBKR", "GMAI-IBKR-1", "AAPL", "BUY", 1.0
+    )
+
+    partial_raw = {
+        "orderId": 9003,
+        "ticker": "AAPL",
+        "side": "BUY",
+        "status": "PartiallyFilled",
+        "totalSize": "1",
+        "filledQuantity": "0.4",
+        "avgPrice": "210.00",
+        "order_ref": "GMAI-IBKR-1",
+    }
+    final_raw = {
+        **partial_raw,
+        "status": "Filled",
+        "filledQuantity": "1.0",
+        "avgPrice": "211.00",
+    }
+
+    partial = adapter._normalize_order(partial_raw)
+    final = adapter._normalize_order(final_raw)
+    assert partial is not None
+    assert final is not None
+
+    await coordinator.broker_update(OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id=partial["clientOrderId"],
+        status=OrderStatus(partial["status"]),
+        symbol=partial["symbol"],
+        executed_quantity=partial["executedQty"],
+        average_price=partial["avgPrice"],
+        broker_order_id=partial["orderId"],
+        side=partial["side"],
+        original_quantity=partial["origQty"],
+    ))
+    await coordinator.broker_update(OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id=final["clientOrderId"],
+        status=OrderStatus(final["status"]),
+        symbol=final["symbol"],
+        executed_quantity=final["executedQty"],
+        average_price=final["avgPrice"],
+        broker_order_id=final["orderId"],
+        side=final["side"],
+        original_quantity=final["origQty"],
+    ))
+
+    # Replays must not create a second position delta.
+    await coordinator.broker_update(OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id=partial["clientOrderId"],
+        status=OrderStatus(partial["status"]),
+        symbol=partial["symbol"],
+        executed_quantity=partial["executedQty"],
+        average_price=partial["avgPrice"],
+        broker_order_id=partial["orderId"],
+        side=partial["side"],
+        original_quantity=partial["origQty"],
+    ))
+    await coordinator.broker_update(OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id=final["clientOrderId"],
+        status=OrderStatus(final["status"]),
+        symbol=final["symbol"],
+        executed_quantity=final["executedQty"],
+        average_price=final["avgPrice"],
+        broker_order_id=final["orderId"],
+        side=final["side"],
+        original_quantity=final["origQty"],
+    ))
+
+    position = coordinator.positions.get("IBKR-01", "AAPL")
+    assert position is not None
+    assert position.quantity == pytest.approx(1.0)
+    assert coordinator.execution_ledger.delta(
+        "GMAI-IBKR-1", 1.0, account_id="IBKR-01", broker="IBKR"
+    ) == pytest.approx(0.0)
