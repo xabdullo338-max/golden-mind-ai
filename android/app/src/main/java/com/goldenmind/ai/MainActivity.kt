@@ -20,6 +20,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 private val Bg = Color(0xFF050812)
@@ -105,7 +109,7 @@ fun GoldenMindApp() {
     var selected by remember { mutableIntStateOf(0) }
     var session by remember { mutableStateOf(api.hasSession()) }
     var health by remember { mutableStateOf<ApiHealth?>(null) }
-    var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }
+    var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }\n    var market by remember { mutableStateOf<MarketTickInfo?>(null) }\n    var risk by remember { mutableStateOf<RiskSnapshotInfo?>(null) }\n    var orderHistory by remember { mutableStateOf<List<OrderHistoryInfo>>(emptyList()) }
     MaterialTheme(colorScheme = GmColors) {
         if (!session) {
             LoginScreen(api) { session = true }
@@ -113,17 +117,20 @@ fun GoldenMindApp() {
         }
     val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     LaunchedEffect(Unit) {
-        Thread {
+        while (isActive) {
             try {
-                val h = api.health()
-                val a = api.accounts()
-                mainHandler.post {
-                    health = h
-                    accounts = a
+                val snapshot = withContext(Dispatchers.IO) {
+                    Triple(api.health(), api.accounts(), runCatching { api.market("BTCUSDT") }.getOrNull())
                 }
+                health = snapshot.first
+                accounts = snapshot.second
+                market = snapshot.third
+                risk = withContext(Dispatchers.IO) { runCatching { api.riskSnapshot() }.getOrNull() }
+                orderHistory = withContext(Dispatchers.IO) { runCatching { api.orderHistory() }.getOrDefault(emptyList()) }
             } catch (_: Exception) {
             }
-        }.start()
+            delay(5000)
+        }
     }
     MaterialTheme(colorScheme = darkColorScheme(background = Bg, surface = Card, primary = Blue, onBackground = Txt, onSurface = Txt)) {
         Scaffold(
@@ -153,7 +160,7 @@ fun GoldenMindApp() {
             }
         ) { padding ->
             when (selected) {
-                0 -> DashboardScreen(health, accounts, false, null, padding, {})
+                0 -> DashboardScreen(health, accounts, market, risk, false, null, padding, {})
                 1 -> TradeScreen(padding, api, accounts)
                 2 -> RobotScreen(padding)
                 3 -> AccountsScreen(accounts, api, padding)
@@ -188,7 +195,7 @@ fun StatCard(label: String, value: String, detail: String, positive: Boolean = t
 }
 
 @Composable
-fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Boolean, error: String?, padding: PaddingValues, onRefresh: () -> Unit) {
+fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, market: MarketTickInfo?, risk: RiskSnapshotInfo?, loading: Boolean, error: String?, padding: PaddingValues, onRefresh: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -199,6 +206,15 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
         error?.let { msg -> item { Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF2A1820)) {
             Text(msg, color = Red, fontSize = 12.sp, modifier = Modifier.padding(14.dp))
         } } }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard("BTCUSDT", market?.let { "$" + "%.2f".format(java.util.Locale.US, it.price) } ?: "—",
+                    if (market != null) "LIVE • spread %.3f%%".format(java.util.Locale.US, market.spreadPct ?: 0.0) else "Market unavailable")
+                StatCard("Equity", risk?.let { "$" + "%.2f".format(java.util.Locale.US, it.equity) } ?: "—",
+                    if (risk != null) "Daily loss %.2f%%".format(java.util.Locale.US, risk.dailyLossPct) else "Risk unavailable",
+                    positive = (risk?.dailyLossPct ?: 0.0) < 3.0)
+            }
+        }
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
