@@ -403,3 +403,69 @@ async def test_recovery_and_websocket_fill_reconcile_without_double_count():
     assert position.quantity == pytest.approx(0.01)
     assert lifecycle.get("race-1", "A", "BINANCE").status is OrderStatus.FILLED
     assert pending.list_account("A", "BINANCE") == []
+
+
+@pytest.mark.asyncio
+async def test_ibkr_recovery_and_live_fill_replay_do_not_double_count():
+    adapter = TimeoutAdapter("FILLED", executed_qty=1.0)
+    adapter.account = BrokerAccount("IBKR-01", "IBKR", "DEMO")
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    from app.order_lifecycle import OrderUpdate
+
+    pending.mark(PendingOrder(
+        "IBKR", "IBKR-01", "GMAI-IBKR-RACE", "AAPL", "BUY", 1.0
+    ))
+    lifecycle.apply(OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id="GMAI-IBKR-RACE",
+        status=OrderStatus.UNKNOWN,
+        symbol="AAPL",
+        side="BUY",
+        original_quantity=1.0,
+    ))
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("IBKR-01", "IBKR", {"USD": 1000.0}, [])
+    positions = PositionEngine()
+    coordinator = ExecutionCoordinator(
+        lifecycle,
+        TradingJournal(":memory:"),
+        EventBus(),
+        positions=positions,
+        execution_ledger=ExecutionLedger(":memory:"),
+    )
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=lifecycle,
+        pending_orders=pending,
+        execution_coordinator=coordinator,
+    )
+
+    live_partial = OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id="GMAI-IBKR-RACE",
+        status=OrderStatus.PARTIALLY_FILLED,
+        symbol="AAPL",
+        executed_quantity=0.4,
+        average_price=210.0,
+        broker_order_id="9004",
+        side="BUY",
+        original_quantity=1.0,
+    )
+
+    await __import__("asyncio").gather(
+        recovery.recover_account("IBKR-01"),
+        coordinator.broker_update(live_partial),
+    )
+
+    position = positions.get("IBKR-01", "AAPL")
+    assert position is not None
+    assert position.quantity == pytest.approx(1.0)
+    assert lifecycle.get("GMAI-IBKR-RACE", "IBKR-01", "IBKR").status is OrderStatus.FILLED
+    assert pending.list_account("IBKR-01", "IBKR") == []
