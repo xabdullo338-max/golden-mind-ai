@@ -74,7 +74,11 @@ async def test_recovery_does_not_fabricate_entry_when_history_is_incomplete():
 
     result = await recovery.recover_account("A")
 
-    assert result.confirmed is True
+    # Position history is insufficient to prove the broker quantity.
+    # Recovery must fail closed instead of inventing an entry price.
+    assert result.confirmed is False
+    assert "position history is incomplete" in result.reason
+    assert state.is_confirmed("A") is False
     assert positions.snapshot("A") == []
 
 
