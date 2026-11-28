@@ -131,6 +131,8 @@ class IBKRAdapter(BrokerAdapter):
             or item.get("client_order_id")
             or item.get("orderRef")
             or item.get("order_ref")
+            or item.get("cOID")
+            or item.get("local_order_id")
             or ""
         ).strip()
         broker_order_id = item.get("orderId", item.get("order_id"))
@@ -218,6 +220,9 @@ class IBKRAdapter(BrokerAdapter):
         order = {"acctId": self.account.account_id, "conid": kwargs.get("conid"),
                  "symbol": symbol, "side": side.upper(), "quantity": quantity,
                  "tif": kwargs.get("tif", "DAY"), "type": order_type.upper()}
+        client_order_id = kwargs.get("client_order_id")
+        if client_order_id:
+            order["cOID"] = str(client_order_id)
         if order["conid"] is None:
             raise ValueError("IBKR order requires conid from contract lookup")
         if order["type"] == "LMT":
