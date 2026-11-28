@@ -76,3 +76,20 @@ def test_different_accounts_do_not_collide_on_client_order_id():
     x.apply(second)
     assert x.get("same-id", "A", "BINANCE").status == OrderStatus.FILLED
     assert x.get("same-id", "B", "BINANCE").status == OrderStatus.NEW
+
+
+def test_partial_fill_quantity_cannot_regress():
+    x = OrderLifecycle()
+    first = u(OrderStatus.PARTIALLY_FILLED, 0.6, original=1.0, last_fill_qty=0.6)
+    second = u(OrderStatus.PARTIALLY_FILLED, 0.4, original=1.0, last_fill_qty=0.4)
+    assert x.apply(first) == first
+    assert x.apply(second) == first
+    assert x.get("cid-1").executed_quantity == 0.6
+
+
+def test_partial_fill_can_advance():
+    x = OrderLifecycle()
+    x.apply(u(OrderStatus.PARTIALLY_FILLED, 0.4, original=1.0, last_fill_qty=0.4))
+    newer = u(OrderStatus.PARTIALLY_FILLED, 0.7, original=1.0, last_fill_qty=0.3)
+    assert x.apply(newer) == newer
+    assert x.get("cid-1").executed_quantity == 0.7
