@@ -25,6 +25,7 @@ class RecoveryResult:
     broker_open_orders: list[dict[str, Any]]
     confirmed: bool
     reason: str = ""
+    broker_executions: list[dict[str, Any]] = None
 
 
 class BrokerRecovery:
@@ -137,7 +138,7 @@ class BrokerRecovery:
                 balances=balances,
                 positions=positions,
                 open_orders=open_orders,
-                executions=[],
+                executions=executions or [],
             )
             self._phase[account_id] = RecoveryPhase.CONFIRMED
             recovery_confirmed = True
@@ -147,7 +148,7 @@ class BrokerRecovery:
                 positions,
                 open_orders,
                 True,
-                "broker balances, positions and open orders reconciled",
+                "broker balances, positions, orders and executions reconciled",
             )
         except Exception as exc:
             self.portfolio_state.mark_unconfirmed(
