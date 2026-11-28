@@ -125,7 +125,7 @@ class IBKRAdapter(BrokerAdapter):
             return None
         symbol = str(item.get("symbol") or item.get("ticker") or "").upper().strip()
         side = str(item.get("side") or item.get("action") or "").upper().strip()
-        status = str(item.get("status") or "").upper().strip()
+        status = IBKRAdapter._map_order_status(item.get("status"))
         client_order_id = str(
             item.get("clientOrderId")
             or item.get("client_order_id")
@@ -162,6 +162,24 @@ class IBKRAdapter(BrokerAdapter):
             "avgPrice": avg_price,
             "orderId": str(broker_order_id) if broker_order_id is not None else None,
         }
+
+    @staticmethod
+    def _map_order_status(status: str) -> str:
+        value = str(status or "").strip().upper().replace(" ", "")
+        return {
+            "SUBMITTED": "NEW",
+            "PRESUBMITTED": "NEW",
+            "PENDING": "NEW",
+            "PENDING_SUBMIT": "NEW",
+            "PARTIALLYFILLED": "PARTIALLY_FILLED",
+            "PARTIALFILLED": "PARTIALLY_FILLED",
+            "FILLED": "FILLED",
+            "CANCELLED": "CANCELED",
+            "CANCELED": "CANCELED",
+            "EXPIRED": "EXPIRED",
+            "INACTIVE": "UNKNOWN",
+            "REJECTED": "REJECTED",
+        }.get(value, "UNKNOWN")
 
     async def get_open_orders(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
