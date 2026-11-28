@@ -33,6 +33,11 @@ class RecoveryAdapter(BrokerAdapter):
             raise RuntimeError("broker unavailable")
         return []
 
+    async def get_trade_history(self, symbol, limit=1000):
+        if self.fail_recovery:
+            raise RuntimeError("broker unavailable")
+        return []
+
     async def place_order(self, symbol, side, quantity, order_type="MARKET", **kwargs):
         return {"status": "FILLED", "symbol": symbol, "side": side, "executedQty": quantity}
 
@@ -131,3 +136,70 @@ async def test_recovery_phase_transitions_to_failed():
     result = await recovery.recover_account("A")
     assert result.confirmed is False
     assert recovery.phase("A") is RecoveryPhase.FAILED
+
+
+class PositionRecoveryAdapter(RecoveryAdapter):
+    def __init__(self, account_id="A"):
+        super().__init__(account_id)
+        self.account = BrokerAccount(account_id, "TEST", "TESTNET")
+        self.position = [{"asset": "BTC", "quantity": 0.25}]
+
+    async def get_positions(self):
+        return list(self.position)
+
+    async def get_trade_history(self, symbol, limit=1000):
+        if symbol.upper() != "BTCUSDT":
+            return []
+        return [{
+            "symbol": "BTCUSDT",
+            "side": "BUY",
+            "qty": 0.25,
+            "price": 40000.0,
+            "commission": 0.0,
+            "commissionAsset": "USDT",
+            "time": 1,
+            "id": 1,
+            "isBuyer": True,
+        }]
+
+
+@pytest.mark.asyncio
+async def test_recovery_reconstructs_position_from_broker_trade_history():
+    accounts = AccountManager()
+    adapter = PositionRecoveryAdapter()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    journal = TradingJournal(":memory:")
+    positions = PositionEngine()
+
+    recovery = BrokerRecovery(accounts, state, journal, positions=positions)
+    result = await recovery.recover_account("A")
+
+    assert result.confirmed is True
+    recovered = positions.snapshot("A")
+    assert len(recovered) == 1
+    assert recovered[0].symbol == "BTCUSDT"
+    assert recovered[0].quantity == pytest.approx(0.25)
+    assert recovered[0].average_entry == pytest.approx(40000.0)
+
+
+class IncompletePositionHistoryAdapter(PositionRecoveryAdapter):
+    async def get_trade_history(self, symbol, limit=1000):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_recovery_freezes_when_position_history_cannot_prove_broker_quantity():
+    accounts = AccountManager()
+    adapter = IncompletePositionHistoryAdapter()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    journal = TradingJournal(":memory:")
+    positions = PositionEngine()
+
+    recovery = BrokerRecovery(accounts, state, journal, positions=positions)
+    result = await recovery.recover_account("A")
+
+    assert result.confirmed is False
+    assert "position history is incomplete" in result.reason
+    assert state.is_confirmed("A") is False
