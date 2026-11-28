@@ -130,5 +130,9 @@ async def test_out_of_order_lower_cumulative_fill_is_rejected():
     await coordinator.submitted("A", "BINANCE", "o-1", "BTCUSDT", "BUY", 1.0)
 
     await coordinator.broker_update(make_update(OrderStatus.PARTIALLY_FILLED, 0.7, price=100.0))
-    with pytest.raises(ValueError, match="moved backwards"):
-        await coordinator.broker_update(make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0))
+    # The lifecycle layer rejects delayed lower cumulative fills before they
+    # reach the durable execution ledger. They must be ignored, not re-applied.
+    await coordinator.broker_update(make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0))
+
+    position = coordinator.positions.get("A", "BTCUSDT")
+    assert position.quantity == pytest.approx(0.7)
