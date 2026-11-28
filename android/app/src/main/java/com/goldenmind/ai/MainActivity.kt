@@ -83,7 +83,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                     Text(if (busy) "CONNECTING…" else "KIRISH", color = Color.Black, fontWeight = FontWeight.ExtraBold)
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("Testnet / Paper • API secrets are server-side", color = Muted, fontSize = 10.sp)
+                Text("TESTNET • API secrets are server-side", color = Muted, fontSize = 10.sp)
             }
         }
     }
@@ -131,10 +131,10 @@ fun GoldenMindApp() {
             bottomBar = {
                 NavigationBar(containerColor = Color(0xFF0F1522)) {
                     listOf(
-                        Triple("Home", Icons.Default.Home, 0),
-                        Triple("Trade", Icons.Default.ShowChart, 1),
-                        Triple("Robot", Icons.Default.Bolt, 2),
-                        Triple("Accounts", Icons.Default.AccountBalanceWallet, 3),
+                        Triple("Bosh", Icons.Default.Home, 0),
+                        Triple("Savdo", Icons.Default.ShowChart, 1),
+                        Triple("Bot", Icons.Default.Bolt, 2),
+                        Triple("Bozor", Icons.Default.BarChart, 3),
                         Triple("Risk", Icons.Default.Security, 4)
                     ).forEach { (label, icon, index) ->
                         NavigationBarItem(
@@ -202,7 +202,7 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Backend status", color = Muted, fontSize = 12.sp)
+                    Text("Backend status", color = Muted, fontSize = 11.sp)
                     Spacer(Modifier.height(7.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (health?.status == "ok") Green else Amber))
@@ -265,7 +265,7 @@ fun TradeScreen(padding: PaddingValues, api: GoldenMindApi, accounts: List<Accou
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { Header("Trade", "Manual order console") }
+        item { Header("Savdolar", "TESTNET order console") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT").forEach { pair ->
@@ -363,7 +363,7 @@ fun TradeScreen(padding: PaddingValues, api: GoldenMindApi, accounts: List<Accou
 fun RobotScreen(padding: PaddingValues) {
     var enabled by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Header("Robot", "Strategy & execution control") }
+        item { Header("Savdo boti", "Avtomatik savdo va xavfsizlik nazorati") }
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
@@ -406,7 +406,7 @@ fun SettingRow(label: String, value: String) {
 @Composable
 fun AccountsScreen(accounts: List<AccountInfo>, api: GoldenMindApi, padding: PaddingValues) {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Header("Accounts", "Broker connections") }
+        item { Header("Bozor", "Marketlar va kuzatuv") }
         if (accounts.isEmpty()) item { Text("No accounts returned by backend.", color = Muted, fontSize = 13.sp) }
         items(accounts, key = { it.accountId }) { account ->
             var state by remember(account.accountId) { mutableStateOf<AccountState?>(null) }
