@@ -13,7 +13,7 @@ from .order_models import OrderRequest, OrderSide
 from .order_router import OrderRouter
 from .portfolio_state import PortfolioStateManager
 from .risk_engine import RiskEngine
-from .strategy_engine import Candle, Signal, TrendMomentumStrategy
+from .strategy_engine import AdaptiveEnsembleStrategy, Candle, Signal
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class LiveStrategyRunner:
     portfolio_state: PortfolioStateManager
     risk_engine: RiskEngine
     market_data: MarketDataStore
-    strategy: TrendMomentumStrategy
+    strategy: AdaptiveEnsembleStrategy
 
     async def run_forever(self) -> None:
         account_id = self.settings.binance_account_id
@@ -107,7 +107,7 @@ class LiveStrategyRunner:
                         "current_price": tick.price,
                         "stop_price": stop,
                         "take_profit_price": decision.take_profit_price,
-                        "strategy": "trend_momentum_1m",
+                        "strategy": "adaptive_ensemble_1m",\n                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
@@ -124,7 +124,7 @@ class LiveStrategyRunner:
                     quantity=quantity,
                     metadata={
                         "current_price": tick.price,
-                        "strategy": "trend_momentum_1m_exit",
+                        "strategy": "adaptive_ensemble_1m_exit",\n                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
