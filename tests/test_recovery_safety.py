@@ -236,3 +236,38 @@ def test_recovery_freezes_on_execution_order_mismatch():
     ok, reason = BrokerRecovery._validate_order_executions(orders, executions)
     assert ok is False
     assert "execution mismatch" in reason
+
+@pytest.mark.asyncio
+async def test_recovery_retains_broker_execution_facts():
+    accounts = AccountManager()
+    adapter = RecoveryAdapter()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    journal = TradingJournal(":memory:")
+
+    async def trades():
+        return [{
+            "executionId": "E-1",
+            "clientOrderId": "",
+            "brokerOrderId": "",
+            "symbol": "AAPL",
+            "side": "BUY",
+            "quantity": 1.0,
+            "price": 210.0,
+        }]
+
+    adapter.get_account_trades = trades
+    recovery = BrokerRecovery(accounts, state, journal)
+    result = await recovery.recover_account("A")
+
+    assert result.confirmed is True
+    assert result.broker_executions == [{
+        "executionId": "E-1",
+        "clientOrderId": "",
+        "brokerOrderId": "",
+        "symbol": "AAPL",
+        "side": "BUY",
+        "quantity": 1.0,
+        "price": 210.0,
+    }]
+    assert state.get("A").executions == result.broker_executions
