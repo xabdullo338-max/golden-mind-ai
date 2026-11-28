@@ -416,3 +416,21 @@ async def test_live_execution_is_deferred_until_recovery_finishes():
     assert coordinator.lifecycle.get(
         "GMAI-GATE-1", "IBKR-01", "IBKR"
     ).status is OrderStatus.FILLED
+
+
+def test_ibkr_execution_duplicate_is_ignored_and_correction_replaces():
+    ledger = ExecutionLedger(":memory:")
+
+    delta, changed = ledger.record_execution("E-1.01", 1.0, "A", "IBKR")
+    assert (delta, changed) == (1.0, True)
+
+    delta, changed = ledger.record_execution("E-1.01", 1.0, "A", "IBKR")
+    assert (delta, changed) == (0.0, False)
+
+    # IBKR corrections keep the same stable execution identity but change
+    # the suffix after the final period.
+    delta, changed = ledger.record_execution("E-1.02", 0.8, "A", "IBKR")
+    assert (delta, changed) == (-0.2, True)
+
+    delta, changed = ledger.record_execution("E-1.02", 0.8, "A", "IBKR")
+    assert (delta, changed) == (0.0, False)
