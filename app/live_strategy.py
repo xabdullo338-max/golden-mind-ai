@@ -157,3 +157,4 @@ class LiveStrategyRunner:
                     },
                 )
                 await self.router.route(account_id, order)
+                self.last_candles[symbol] = candle_timestamp
