@@ -73,6 +73,11 @@ class RiskEngine:
         self._last_order_at: dict[str, float] = {}
         self._consecutive_losses: dict[str, int] = {}
 
+    def record_order_accepted(self, account_id: str) -> None:
+        """Start the cooldown only after the broker accepted the order."""
+        if self.cooldown_seconds:
+            self._last_order_at[account_id] = self._clock()
+
     def record_trade_result(self, account_id: str, pnl: float) -> None:
         if pnl < 0:
             self._consecutive_losses[account_id] = self._consecutive_losses.get(account_id, 0) + 1
