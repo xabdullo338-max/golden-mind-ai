@@ -50,9 +50,9 @@ class BrokerAdapter(ABC):
         """Return broker truth for an order identified by client order ID."""
         return None
 
-    async def get_account_trades(self) -> list[dict[str, Any]]:
-        """Return recent account-level executions for reconciliation."""
-        return []
+    async def get_account_trades(self) -> list[dict[str, Any]] | None:
+        """Return recent account-level executions for reconciliation, or None if unsupported."""
+        return None
 
     async def hydrate_positions(self, position_engine: Any, account_id: str,
                                 positions: list[dict[str, Any]]) -> bool:
