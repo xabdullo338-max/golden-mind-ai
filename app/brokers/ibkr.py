@@ -31,10 +31,10 @@ class IBKRAdapter(BrokerAdapter):
             headers["Cookie"] = f"api={self.session_cookie}"
         return headers
 
-    async def _request(self, method: str, path: str, *, json: Any = None):
+    async def _request(self, method: str, path: str, *, json: Any = None, params: dict[str, Any] | None = None):
         async with httpx.AsyncClient(timeout=self.timeout_seconds, verify=self.verify_tls) as client:
             response = await client.request(method, f"{self.base_url}{path}",
-                                             headers=self._headers(), json=json)
+                                             headers=self._headers(), json=json, params=params)
         if response.status_code >= 400:
             raise IBKRAPIError(f"IBKR API {response.status_code}: {response.text[:500]}")
         return response.json()
@@ -198,9 +198,17 @@ class IBKRAdapter(BrokerAdapter):
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:
         if self.account.mode == "PAPER":
             return None
-        for order in await self.get_open_orders():
+
+        # IBKR's account-orders monitor can expose recently active, cancelled,
+        # and filled orders. Recovery must inspect broker truth rather than
+        # treating absence from the current open-order set as proof of rejection.
+        raw = await self._request("GET", "/v1/api/iserver/account/orders")
+        items = raw.get("orders", []) if isinstance(raw, dict) else raw
+        for item in items if isinstance(items, list) else []:
+            order = self._normalize_order(item)
             if (
-                order.get("clientOrderId") == client_order_id
+                order is not None
+                and order.get("clientOrderId") == client_order_id
                 and str(order.get("symbol", "")).upper() == symbol.upper()
             ):
                 return order
