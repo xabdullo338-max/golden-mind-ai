@@ -61,28 +61,6 @@ class BrokerRecovery:
             positions = await adapter.get_positions()
             open_orders = await adapter.get_open_orders()
 
-            if self.positions is not None:
-                positions_reconciled = await adapter.hydrate_positions(
-                    self.positions, account_id, positions
-                )
-                if not positions_reconciled:
-                    positions_reconciled = await self._hydrate_positions(adapter, positions)
-                if not positions_reconciled:
-                    reason = "broker position history is incomplete; position state cannot be proven"
-                    self.portfolio_state.mark_unconfirmed(
-                        account_id, adapter.account.broker
-                    )
-                    if self.emergency is not None:
-                        await self.emergency.freeze_account(account_id, reason)
-                    self._phase[account_id] = RecoveryPhase.FAILED
-                    return RecoveryResult(
-                        account_id,
-                        balances,
-                        positions,
-                        open_orders,
-                        False,
-                        reason,
-                    )
             if self.lifecycle is not None:
                 self._hydrate_open_orders(
                     adapter.account.account_id,
@@ -117,6 +95,28 @@ class BrokerRecovery:
                         reason,
                     )
 
+            if self.positions is not None:
+                positions_reconciled = await adapter.hydrate_positions(
+                    self.positions, account_id, positions
+                )
+                if not positions_reconciled:
+                    positions_reconciled = await self._hydrate_positions(adapter, positions)
+                if not positions_reconciled:
+                    reason = "broker position history is incomplete; position state cannot be proven"
+                    self.portfolio_state.mark_unconfirmed(
+                        account_id, adapter.account.broker
+                    )
+                    if self.emergency is not None:
+                        await self.emergency.freeze_account(account_id, reason)
+                    self._phase[account_id] = RecoveryPhase.FAILED
+                    return RecoveryResult(
+                        account_id,
+                        balances,
+                        positions,
+                        open_orders,
+                        False,
+                        reason,
+                    )
             self.portfolio_state.reconcile(
                 account_id=account_id,
                 broker=adapter.account.broker,
