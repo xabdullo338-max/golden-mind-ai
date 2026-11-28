@@ -147,3 +147,37 @@ async def test_out_of_order_lower_cumulative_fill_is_rejected():
 
     position = coordinator.positions.get("A", "BTCUSDT")
     assert position.quantity == pytest.approx(0.7)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_duplicate_filled_updates_apply_once():
+    coordinator = ExecutionCoordinator(
+        lifecycle=OrderLifecycle(),
+        journal=TradingJournal(":memory:"),
+        event_bus=EventBus(),
+        positions=PositionEngine(),
+        execution_ledger=ExecutionLedger(),
+    )
+    await coordinator.submitted("A", "BINANCE", "o-race", "BTCUSDT", "BUY", 1.0)
+
+    update = make_update(
+        OrderStatus.FILLED,
+        1.0,
+        client="o-race",
+        price=100.0,
+        last_qty=1.0,
+        last_price=100.0,
+    )
+
+    await __import__("asyncio").gather(
+        coordinator.broker_update(update),
+        coordinator.broker_update(update),
+    )
+
+    position = coordinator.positions.get("A", "BTCUSDT")
+    assert position is not None
+    assert position.quantity == pytest.approx(1.0)
+
+    replay = await coordinator.broker_update(update)
+    assert replay.executed_quantity == pytest.approx(1.0)
+    assert coordinator.positions.get("A", "BTCUSDT").quantity == pytest.approx(1.0)
