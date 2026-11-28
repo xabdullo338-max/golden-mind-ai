@@ -140,7 +140,7 @@ class IBKRAdapter(BrokerAdapter):
             return None
         try:
             original = float(
-                item.get("quantity", item.get("origQty", item.get("totalQuantity", 0.0))) or 0.0
+                item.get("quantity", item.get("origQty", item.get("totalQuantity", item.get("totalSize", 0.0)))) or 0.0
             )
             executed = float(
                 item.get("executedQty", item.get("filledQuantity", item.get("cumQty", 0.0))) or 0.0
