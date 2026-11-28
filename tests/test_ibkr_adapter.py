@@ -202,3 +202,35 @@ async def test_ibkr_pending_lookup_finds_filled_order_from_account_monitor(monke
     assert order["status"] == "FILLED"
     assert order["executedQty"] == 1.0
     assert order["avgPrice"] == 211.10
+
+@pytest.mark.asyncio
+async def test_ibkr_account_trades_are_normalized(monkeypatch):
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+
+    async def fake_request(method, path, *, json=None):
+        assert method == "GET"
+        assert path == "/v1/api/iserver/account/trades"
+        return {
+            "trades": [{
+                "execution_id": "E-1",
+                "order_ref": "GMAI-9003",
+                "order_id": 9003,
+                "symbol": "AAPL",
+                "side": "BUY",
+                "size": "1.0",
+                "price": "211.25",
+            }]
+        }
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    trades = await adapter.get_account_trades()
+
+    assert trades == [{
+        "executionId": "E-1",
+        "clientOrderId": "GMAI-9003",
+        "brokerOrderId": "9003",
+        "symbol": "AAPL",
+        "side": "BUY",
+        "quantity": 1.0,
+        "price": 211.25,
+    }]
