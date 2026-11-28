@@ -149,6 +149,7 @@ class BrokerRecovery:
                 open_orders,
                 True,
                 "broker balances, positions, orders and executions reconciled",
+                executions or [],
             )
         except Exception as exc:
             self.portfolio_state.mark_unconfirmed(
