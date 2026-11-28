@@ -50,7 +50,7 @@ class LiveStrategyRunner:
         while True:
             try:
                 await self.step(adapter, account_id, last_candle)
-                candles = await adapter.get_candles("BTCUSDT", "1m", 30)
+                candles = await adapter.get_candles("BTCUSDT", "1m", 45)
                 if candles:
                     last_candle = int(candles[-1]["timestamp"])
             except asyncio.CancelledError:
