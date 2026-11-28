@@ -63,15 +63,27 @@ class LiveStrategyRunner:
     async def step(self, adapter: BinanceAdapter, account_id: str) -> None:
         for symbol in sorted(self.settings.symbols):
             rows = await adapter.get_candles(symbol, "1m", 60)
-            if len(rows) < 45:
+            if len(rows) < 46:
                 continue
 
-            candle_timestamp = int(rows[-1]["timestamp"])
+            # Evaluate the last fully closed 1m candle. The newest Binance
+            # candle can still be forming and must not drive an order.
+            closed_rows = rows[:-1]
+            candle_timestamp = int(closed_rows[-1]["timestamp"])
             if self.last_candles.get(symbol) == candle_timestamp:
                 continue
-            self.last_candles[symbol] = candle_timestamp
 
-            candles = [Candle(**row) for row in rows]
+            # If a previous broker request timed out, its outcome is unknown.
+            # Do not create a new order until reconciliation resolves it.
+            if self.router.pending_orders is not None:
+                pending = self.router.pending_orders.list_account(
+                    account_id,
+                    managed.adapter.account.broker,
+                )
+                if any(item.symbol.upper() == symbol.upper() for item in pending):
+                    continue
+
+            candles = [Candle(**row) for row in closed_rows]
             decision = self.strategy.evaluate(candles)
             tick = await adapter.get_market_tick(symbol)
             if tick is None:
@@ -80,6 +92,11 @@ class LiveStrategyRunner:
             state = self.portfolio_state.get(account_id)
             if state is None or not state.confirmed:
                 continue
+
+            # Mark the candle only after all pre-trade state checks passed.
+            # Risk/order failures should not make an unprocessed candle look
+            # successfully handled.
+            self.last_candles[symbol] = candle_timestamp
 
             base = symbol.removesuffix("USDT")
             held = float(state.positions.get(base, 0.0))
