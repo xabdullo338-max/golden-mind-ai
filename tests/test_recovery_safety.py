@@ -203,3 +203,36 @@ async def test_recovery_freezes_when_position_history_cannot_prove_broker_quanti
     assert result.confirmed is False
     assert "position history is incomplete" in result.reason
     assert state.is_confirmed("A") is False
+
+def test_recovery_execution_reconciliation_matches_filled_order():
+    orders = [{
+        "clientOrderId": "GMAI-9003",
+        "orderId": "9003",
+        "symbol": "AAPL",
+        "executedQty": 1.0,
+    }]
+    executions = [{
+        "clientOrderId": "GMAI-9003",
+        "brokerOrderId": "9003",
+        "symbol": "AAPL",
+        "quantity": 1.0,
+    }]
+    assert BrokerRecovery._validate_order_executions(orders, executions) == (True, "")
+
+
+def test_recovery_freezes_on_execution_order_mismatch():
+    orders = [{
+        "clientOrderId": "GMAI-9004",
+        "orderId": "9004",
+        "symbol": "AAPL",
+        "executedQty": 1.0,
+    }]
+    executions = [{
+        "clientOrderId": "GMAI-9004",
+        "brokerOrderId": "9004",
+        "symbol": "AAPL",
+        "quantity": 0.4,
+    }]
+    ok, reason = BrokerRecovery._validate_order_executions(orders, executions)
+    assert ok is False
+    assert "execution mismatch" in reason
