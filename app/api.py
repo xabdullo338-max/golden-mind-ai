@@ -249,6 +249,31 @@ async def risk_snapshot(_: dict = Depends(require_scope("read"))):
         },
     }
 
+@app.get("/orders/pending")
+async def orders_pending(_: dict = Depends(require_scope("read"))):
+    account_id = settings.binance_account_id
+    managed = accounts.accounts.get(account_id)
+    if managed is None:
+        raise HTTPException(status_code=404, detail="Binance account is not registered")
+    return {
+        "account_id": account_id,
+        "orders": [
+            {
+                "broker": item.broker,
+                "account_id": item.account_id,
+                "client_order_id": item.client_order_id,
+                "symbol": item.symbol,
+                "side": item.side,
+                "quantity": item.quantity,
+            }
+            for item in pending_orders.list_account(
+                account_id,
+                managed.adapter.account.broker,
+            )
+        ],
+    }
+
+
 @app.get("/orders/history")
 async def orders_history(_: dict = Depends(require_scope("read"))):
     lifecycle = order_router.lifecycle
