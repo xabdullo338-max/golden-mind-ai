@@ -109,7 +109,10 @@ fun GoldenMindApp() {
     var selected by remember { mutableIntStateOf(0) }
     var session by remember { mutableStateOf(api.hasSession()) }
     var health by remember { mutableStateOf<ApiHealth?>(null) }
-    var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList()) }\n    var market by remember { mutableStateOf<MarketTickInfo?>(null) }\n    var risk by remember { mutableStateOf<RiskSnapshotInfo?>(null) }\n    var orderHistory by remember { mutableStateOf<List<OrderHistoryInfo>>(emptyList()) }
+    var accounts by remember { mutableStateOf<List<AccountInfo>>(emptyList())}
+    var market by remember { mutableStateOf<MarketTickInfo?>(null) }
+    var risk by remember { mutableStateOf<RiskSnapshotInfo?>(null) }
+    var orderHistory by remember { mutableStateOf<List<OrderHistoryInfo>>(emptyList()) }
     MaterialTheme(colorScheme = GmColors) {
         if (!session) {
             LoginScreen(api) { session = true }
