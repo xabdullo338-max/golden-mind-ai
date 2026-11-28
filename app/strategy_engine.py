@@ -268,7 +268,7 @@ class AdaptiveEnsembleStrategy:
         momentum_vote = 1.0 if i.momentum_pct > 0.05 else (-1.0 if i.momentum_pct < -0.05 else 0.0)
         rsi_vote = 1.0 if 50 < i.rsi < 72 else (-1.0 if 28 < i.rsi < 50 else 0.0)
         volume_vote = 1.0 if i.volume_ratio >= 1.15 else 0.0
-        score = 0.40 * trend_vote + 0.30 * momentum_vote + 0.20 * rsi_vote + 0.10 * volume_vote
+        score = 0.35 * trend_vote + 0.25 * momentum_vote + 0.15 * rsi_vote + 0.10 * volume_vote\n        if ai_probability is not None:\n            score += 0.15 * (2.0 * ai_probability - 1.0)
 
         if regime == MarketRegime.TREND_UP:
             score += 0.10
@@ -279,7 +279,7 @@ class AdaptiveEnsembleStrategy:
 
         confidence = min(0.99, 0.50 + abs(score) * 0.45 + i.trend_strength * 0.10)
         if confidence < self.min_confidence or regime in {MarketRegime.HIGH_VOLATILITY, MarketRegime.UNCERTAIN}:
-            return AdaptiveDecision(Signal.HOLD, confidence, regime=regime, indicators=i, model_score=score,
+            return AdaptiveDecision(Signal.HOLD, confidence, regime=regime, indicators=i, model_score=score, ai_probability=ai_probability,
                                     reason=f"regime gate: {regime.value}")
 
         risk_distance = max(i.atr * 1.8, current * 0.0015)
@@ -300,4 +300,4 @@ class AdaptiveEnsembleStrategy:
                 reason=f"ensemble SELL: trend+momentum+RSI+volume; regime={regime.value}",
             )
         return AdaptiveDecision(Signal.HOLD, confidence, regime=regime, indicators=i, model_score=score,
-                                reason="ensemble score below entry threshold")
+                                ai_probability=ai_probability, reason="ensemble score below entry threshold")
