@@ -127,7 +127,8 @@ class LiveStrategyRunner:
                     metadata={
                         "current_price": tick.price,
                         "strategy": "adaptive_ensemble_1m_exit",
-                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
+                        "regime": decision.regime.value,
+                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
