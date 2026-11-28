@@ -195,6 +195,38 @@ class IBKRAdapter(BrokerAdapter):
                 normalized.append(order)
         return normalized
 
+    async def get_account_trades(self) -> list[dict[str, Any]]:
+        if self.account.mode == "PAPER":
+            return []
+        raw = await self._request("GET", "/v1/api/iserver/account/trades")
+        items = raw.get("trades", []) if isinstance(raw, dict) else raw
+        normalized: list[dict[str, Any]] = []
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            execution_id = str(item.get("execution_id") or item.get("execId") or "").strip()
+            order_ref = str(item.get("order_ref") or item.get("orderRef") or item.get("cOID") or "").strip()
+            order_id = item.get("order_id", item.get("orderId"))
+            symbol = str(item.get("symbol") or item.get("ticker") or "").upper().strip()
+            side = str(item.get("side") or "").upper().strip()
+            try:
+                quantity = float(item.get("size", item.get("quantity", item.get("filledQuantity", 0.0))) or 0.0)
+                price = float(item.get("price", item.get("avgPrice", 0.0)) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if not execution_id or not symbol or quantity <= 0 or price <= 0:
+                continue
+            normalized.append({
+                "executionId": execution_id,
+                "clientOrderId": order_ref,
+                "brokerOrderId": str(order_id) if order_id is not None else None,
+                "symbol": symbol,
+                "side": side,
+                "quantity": quantity,
+                "price": price,
+            })
+        return normalized
+
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:
         if self.account.mode == "PAPER":
             return None
