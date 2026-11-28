@@ -52,10 +52,14 @@ class BrokerRecovery:
         managed = self.accounts.accounts.get(account_id)
         if not managed or not managed.enabled:
             self._phase[account_id] = RecoveryPhase.FAILED
+            if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
+                await self.execution_coordinator.end_recovery()
             return RecoveryResult(account_id, {}, [], [], False, "account unavailable")
 
         adapter = managed.adapter
         self._phase[account_id] = RecoveryPhase.RECONCILING
+        if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "begin_recovery"):
+            self.execution_coordinator.begin_recovery()
         try:
             balances = await adapter.get_balance()
             positions = await adapter.get_positions()
@@ -86,6 +90,8 @@ class BrokerRecovery:
                     if self.emergency is not None:
                         await self.emergency.freeze_account(account_id, reason)
                     self._phase[account_id] = RecoveryPhase.FAILED
+                    if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
+                        await self.execution_coordinator.end_recovery()
                     return RecoveryResult(
                         account_id,
                         balances,
@@ -126,6 +132,8 @@ class BrokerRecovery:
                 executions=[],
             )
             self._phase[account_id] = RecoveryPhase.CONFIRMED
+            if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
+                await self.execution_coordinator.end_recovery()
             return RecoveryResult(
                 account_id,
                 balances,
@@ -302,7 +310,7 @@ class BrokerRecovery:
                 original_quantity=original,
             )
             if self.execution_coordinator is not None:
-                await self.execution_coordinator.broker_update(update)
+                await self.execution_coordinator.broker_update(update, allow_during_recovery=True)
             else:
                 self.lifecycle.apply(update)
             if status in {
