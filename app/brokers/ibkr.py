@@ -64,7 +64,28 @@ class IBKRAdapter(BrokerAdapter):
     async def get_positions(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
             return []
-        return await self._request("GET", f"/v1/api/portfolio/{self.account.account_id}/positions/0")
+        raw = await self._request(
+            "GET",
+            f"/v1/api/portfolio/{self.account.account_id}/positions/0",
+        )
+        normalized: list[dict[str, Any]] = []
+        for item in raw if isinstance(raw, list) else []:
+            try:
+                quantity = float(item.get("position", item.get("quantity", 0.0)) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            symbol = str(item.get("symbol") or "").upper().strip()
+            if not symbol or quantity == 0:
+                continue
+            asset = symbol
+            normalized.append({
+                "asset": asset,
+                "quantity": quantity,
+                "symbol": symbol,
+                "avgPrice": float(item.get("avgPrice", item.get("averagePrice", 0.0)) or 0.0),
+                "conid": item.get("conid"),
+            })
+        return normalized
 
     async def get_open_orders(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
