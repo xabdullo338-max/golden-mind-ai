@@ -27,10 +27,12 @@ class ExecutionCoordinator:
     def begin_recovery(self) -> None:
         self._recovery_active = True
 
-    async def end_recovery(self) -> None:
+    async def end_recovery(self, *, flush_deferred: bool = True) -> None:
         self._recovery_active = False
         deferred = list(self._deferred_updates or [])
         self._deferred_updates = []
+        if not flush_deferred:
+            return
         for update in deferred:
             await self.broker_update(update)
 
