@@ -40,3 +40,33 @@ async def test_ibkr_positions_are_normalized(monkeypatch):
         "avgPrice": 210.50,
         "conid": 265598,
     }]
+
+
+@pytest.mark.asyncio
+async def test_ibkr_broker_authoritative_position_hydration():
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+    from app.position_engine import PositionEngine
+
+    engine = PositionEngine()
+    ok = await adapter.hydrate_positions(
+        engine,
+        "IBKR-01",
+        [{"asset": "AAPL", "symbol": "AAPL", "quantity": 2.0, "avgPrice": 210.50}],
+    )
+
+    assert ok is True
+    position = engine.get("IBKR-01", "AAPL")
+    assert position.quantity == 2.0
+    assert position.average_entry == 210.50
+
+@pytest.mark.asyncio
+async def test_ibkr_short_position_fails_closed():
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+    from app.position_engine import PositionEngine
+
+    ok = await adapter.hydrate_positions(
+        PositionEngine(),
+        "IBKR-01",
+        [{"asset": "AAPL", "symbol": "AAPL", "quantity": -2.0, "avgPrice": 210.50}],
+    )
+    assert ok is False
