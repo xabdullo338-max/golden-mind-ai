@@ -181,3 +181,81 @@ async def test_concurrent_duplicate_filled_updates_apply_once():
     replay = await coordinator.broker_update(update)
     assert replay.executed_quantity == pytest.approx(1.0)
     assert coordinator.positions.get("A", "BTCUSDT").quantity == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_final_fill_then_delayed_partial_is_ignored():
+    coordinator = ExecutionCoordinator(
+        lifecycle=OrderLifecycle(),
+        journal=TradingJournal(":memory:"),
+        event_bus=EventBus(),
+        positions=PositionEngine(),
+        execution_ledger=ExecutionLedger(),
+    )
+    await coordinator.submitted("A", "BINANCE", "o-order", "BTCUSDT", "BUY", 1.0)
+
+    final = make_update(
+        OrderStatus.FILLED,
+        1.0,
+        client="o-order",
+        price=101.0,
+        last_qty=0.4,
+        last_price=101.5,
+    )
+    delayed_partial = make_update(
+        OrderStatus.PARTIALLY_FILLED,
+        0.6,
+        client="o-order",
+        price=100.5,
+        last_qty=0.2,
+        last_price=100.0,
+    )
+
+    await coordinator.broker_update(final)
+    await coordinator.broker_update(delayed_partial)
+
+    position = coordinator.positions.get("A", "BTCUSDT")
+    assert position is not None
+    assert position.quantity == pytest.approx(1.0)
+    assert coordinator.lifecycle.get("o-order", "A", "BINANCE").status is OrderStatus.FILLED
+
+
+@pytest.mark.asyncio
+async def test_partial_then_final_and_replayed_partial_apply_exact_delta():
+    coordinator = ExecutionCoordinator(
+        lifecycle=OrderLifecycle(),
+        journal=TradingJournal(":memory:"),
+        event_bus=EventBus(),
+        positions=PositionEngine(),
+        execution_ledger=ExecutionLedger(),
+    )
+    await coordinator.submitted("A", "BINANCE", "o-delta", "BTCUSDT", "BUY", 1.0)
+
+    partial = make_update(
+        OrderStatus.PARTIALLY_FILLED,
+        0.4,
+        client="o-delta",
+        price=100.0,
+        last_qty=0.4,
+        last_price=100.0,
+    )
+    final = make_update(
+        OrderStatus.FILLED,
+        1.0,
+        client="o-delta",
+        price=101.0,
+        last_qty=0.6,
+        last_price=101.6666666667,
+    )
+
+    await coordinator.broker_update(partial)
+    await coordinator.broker_update(final)
+    await coordinator.broker_update(partial)
+    await coordinator.broker_update(final)
+
+    position = coordinator.positions.get("A", "BTCUSDT")
+    assert position is not None
+    assert position.quantity == pytest.approx(1.0)
+    assert coordinator.execution_ledger.delta(
+        "o-delta", 1.0, account_id="A", broker="BINANCE"
+    ) == pytest.approx(0.0)
