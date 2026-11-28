@@ -430,7 +430,7 @@ def test_ibkr_execution_duplicate_is_ignored_and_correction_replaces():
     # IBKR corrections keep the same stable execution identity but change
     # the suffix after the final period.
     delta, changed = ledger.record_execution("E-1.02", 0.8, "A", "IBKR")
-    assert (delta, changed) == (-0.2, True)
+    assert delta == pytest.approx(-0.2)\n    assert changed is True
 
     delta, changed = ledger.record_execution("E-1.02", 0.8, "A", "IBKR")
     assert (delta, changed) == (0.0, False)
