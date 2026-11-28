@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordRequestForm
@@ -114,7 +116,6 @@ async def lifespan(_app: FastAPI):
         await start_binance_runtime(runtime)
         reconciliation_task = asyncio.create_task(_reconciliation_loop())
         if settings.live_trading_enabled and runtime.adapter.account.mode == "LIVE":
-            import asyncio
             runner = LiveStrategyRunner(
                 settings=settings,
                 accounts=accounts,
