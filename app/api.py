@@ -81,6 +81,7 @@ order_router = OrderRouter(
 
 runtime = None
 strategy_task = None
+strategy_engine = AdaptiveEnsembleStrategy()
 
 
 @asynccontextmanager
@@ -102,7 +103,7 @@ async def lifespan(_app: FastAPI):
                 portfolio_state=portfolio_state,
                 risk_engine=risk_engine,
                 market_data=market_data,
-                strategy=TrendMomentumStrategy(),
+                strategy=AdaptiveEnsembleStrategy(),
             )
             strategy_task = asyncio.create_task(runner.run_forever())
     yield
@@ -275,7 +276,7 @@ async def strategy_signal(symbol: str = "BTCUSDT", _: dict = Depends(require_sco
     if managed is None:
         raise HTTPException(status_code=404, detail="Binance account is not registered")
     rows = await managed.adapter.get_candles(symbol.upper(), "1m", 60)
-    if len(rows) < 35:
+    if len(rows) < 45:
         raise HTTPException(status_code=503, detail="Not enough candles for strategy evaluation")
     decision = strategy_engine.evaluate([Candle(**row) for row in rows])
     indicators = decision.indicators
@@ -285,6 +286,7 @@ async def strategy_signal(symbol: str = "BTCUSDT", _: dict = Depends(require_sco
         "confidence": decision.confidence,
         "regime": decision.regime.value,
         "model_score": decision.model_score,
+        "ai_probability": decision.ai_probability,
         "stop_price": decision.stop_price,
         "take_profit_price": decision.take_profit_price,
         "reason": decision.reason,
