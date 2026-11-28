@@ -19,6 +19,18 @@ class ExecutionLedger:
         try:
             db.execute(
                 """
+                CREATE TABLE IF NOT EXISTS execution_facts (
+                    broker TEXT NOT NULL,
+                    account_id TEXT NOT NULL,
+                    stable_id TEXT NOT NULL,
+                    execution_id TEXT NOT NULL,
+                    quantity REAL NOT NULL,
+                    PRIMARY KEY (broker, account_id, stable_id)
+                )
+                """
+            )
+            db.execute(
+                """
                 CREATE TABLE IF NOT EXISTS executions (
                     broker TEXT NOT NULL,
                     account_id TEXT NOT NULL,
@@ -113,5 +125,49 @@ class ExecutionLedger:
                 (broker_key, account_key, order_key),
             )
             db.commit()
+        finally:
+            self._close(db)
+
+
+    def execution_correction_key(self, execution_id: str) -> str:
+        """Return the stable IBKR execution key shared by an execution and its correction."""
+        return str(execution_id).rsplit(".", 1)[0]
+
+    def record_execution(
+        self,
+        execution_id: str,
+        quantity: float,
+        account_id: str,
+        broker: str,
+    ) -> tuple[float, bool]:
+        """Record one execution version; corrections replace the prior version."""
+        if quantity < 0:
+            raise ValueError("execution quantity cannot be negative")
+        stable = self.execution_correction_key(execution_id)
+        broker_key, account_key, _ = self._key(stable, account_id, broker)
+        db = self._connect()
+        try:
+            row = db.execute(
+                "SELECT execution_id, quantity FROM execution_facts "
+                "WHERE broker=? AND account_id=? AND stable_id=?",
+                (broker_key, account_key, stable),
+            ).fetchone()
+            if row and str(row[0]) == str(execution_id):
+                return 0.0, False
+            previous = float(row[1]) if row else 0.0
+            if row:
+                db.execute(
+                    "UPDATE execution_facts SET execution_id=?, quantity=? "
+                    "WHERE broker=? AND account_id=? AND stable_id=?",
+                    (str(execution_id), quantity, broker_key, account_key, stable),
+                )
+            else:
+                db.execute(
+                    "INSERT INTO execution_facts(broker,account_id,stable_id,execution_id,quantity) "
+                    "VALUES(?,?,?,?,?)",
+                    (broker_key, account_key, stable, str(execution_id), quantity),
+                )
+            db.commit()
+            return quantity - previous, True
         finally:
             self._close(db)
