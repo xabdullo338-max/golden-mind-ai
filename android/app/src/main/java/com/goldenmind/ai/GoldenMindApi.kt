@@ -25,6 +25,9 @@ data class AccountState(
     val confirmed: Boolean
 )
 data class OrderResult(val status: String, val symbol: String, val side: String, val quantity: Double, val price: Double?)
+data class MarketTickInfo(val symbol: String, val price: Double, val bid: Double?, val ask: Double?, val spreadPct: Double?, val volume: Double?, val timestamp: String)
+data class RiskSnapshotInfo(val equity: Double, val cash: Double, val realizedPnl: Double, val unrealizedPnl: Double, val dailyLossPct: Double, val openPositions: Int)
+data class OrderHistoryInfo(val clientOrderId: String, val status: String, val symbol: String, val side: String?, val quantity: Double, val price: Double?)
 
 class SecureTokenStore(context: Context) {
     private val prefs = context.getSharedPreferences("gmai_secure", Context.MODE_PRIVATE)
@@ -199,6 +202,48 @@ class GoldenMindApi(
         )
     }
 
+    fun market(symbol: String): MarketTickInfo {
+        val json = JSONObject(request("/market?symbol=" + URLEncoder.encode(symbol.uppercase(), "UTF-8")))
+        return MarketTickInfo(
+            json.optString("symbol"),
+            json.optDouble("price"),
+            if (json.has("bid")) json.optDouble("bid") else null,
+            if (json.has("ask")) json.optDouble("ask") else null,
+            if (json.has("spread_pct")) json.optDouble("spread_pct") else null,
+            if (json.has("volume")) json.optDouble("volume") else null,
+            json.optString("timestamp")
+        )
+    }
+
+    fun riskSnapshot(): RiskSnapshotInfo {
+        val json = JSONObject(request("/risk/snapshot"))
+        return RiskSnapshotInfo(
+            json.optDouble("equity"),
+            json.optDouble("cash"),
+            json.optDouble("realized_pnl"),
+            json.optDouble("unrealized_pnl"),
+            json.optDouble("daily_loss_pct"),
+            json.optInt("open_positions")
+        )
+    }
+
+    fun orderHistory(): List<OrderHistoryInfo> {
+        val arr = JSONObject(request("/orders/history")).optJSONArray("orders") ?: JSONArray()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.getJSONObject(i)
+                add(OrderHistoryInfo(
+                    item.optString("client_order_id"),
+                    item.optString("status"),
+                    item.optString("symbol"),
+                    if (item.has("side")) item.optString("side") else null,
+                    item.optDouble("executed_quantity"),
+                    if (item.has("average_price")) item.optDouble("average_price") else null
+                ))
+            }
+        }
+    }
+
     fun placeMarketOrder(
         accountId: String,
         clientOrderId: String,
@@ -215,6 +260,7 @@ class GoldenMindApi(
             put("quantity", quantity)
             put("order_type", "MARKET")
             if (price != null) put("price", price)
+            put("metadata", JSONObject().apply { put("account_id", accountId) })
         }
 
         val json = JSONObject(request("/orders/test", "POST", body.toString()))
