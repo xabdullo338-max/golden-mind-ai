@@ -356,3 +356,41 @@ async def test_ibkr_partial_then_filled_replay_applies_exact_delta():
     assert coordinator.execution_ledger.delta(
         "GMAI-IBKR-1", 1.0, account_id="IBKR-01", broker="IBKR"
     ) == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_live_execution_is_deferred_until_recovery_finishes():
+    coordinator = ExecutionCoordinator(
+        lifecycle=OrderLifecycle(),
+        journal=TradingJournal(":memory:"),
+        event_bus=EventBus(),
+        positions=PositionEngine(),
+        execution_ledger=ExecutionLedger(":memory:"),
+    )
+    await coordinator.submitted(
+        "IBKR-01", "IBKR", "GMAI-GATE-1", "AAPL", "BUY", 1.0
+    )
+
+    coordinator.begin_recovery()
+    update = OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id="GMAI-GATE-1",
+        status=OrderStatus.PARTIALLY_FILLED,
+        symbol="AAPL",
+        executed_quantity=0.4,
+        average_price=210.0,
+        broker_order_id="9100",
+        side="BUY",
+        original_quantity=1.0,
+    )
+
+    deferred = await coordinator.broker_update(update)
+    assert deferred.status is OrderStatus.NEW
+    assert coordinator.positions.get("IBKR-01", "AAPL") is None
+
+    await coordinator.end_recovery()
+
+    position = coordinator.positions.get("IBKR-01", "AAPL")
+    assert position is not None
+    assert position.quantity == pytest.approx(0.4)
