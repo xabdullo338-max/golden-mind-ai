@@ -70,3 +70,55 @@ async def test_ibkr_short_position_fails_closed():
         [{"asset": "AAPL", "symbol": "AAPL", "quantity": -2.0, "avgPrice": 210.50}],
     )
     assert ok is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Submitted", "NEW"),
+        ("PreSubmitted", "NEW"),
+        ("PartiallyFilled", "PARTIALLY_FILLED"),
+        ("Filled", "FILLED"),
+        ("Cancelled", "CANCELED"),
+        ("Inactive", "UNKNOWN"),
+    ],
+)
+def test_ibkr_order_status_mapping(raw, expected):
+    assert IBKRAdapter._map_order_status(raw) == expected
+
+
+@pytest.mark.asyncio
+async def test_ibkr_open_orders_are_normalized(monkeypatch):
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+
+    async def fake_request(method, path, *, json=None):
+        assert method == "GET"
+        assert path == "/v1/api/iserver/account/orders"
+        return {
+            "orders": [
+                {
+                    "orderId": 42,
+                    "orderRef": "GMAI-42",
+                    "ticker": "AAPL",
+                    "side": "BUY",
+                    "status": "PartiallyFilled",
+                    "totalQuantity": "2",
+                    "filledQuantity": "0.5",
+                    "avgPrice": "210.25",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    orders = await adapter.get_open_orders()
+
+    assert orders == [{
+        "clientOrderId": "GMAI-42",
+        "symbol": "AAPL",
+        "side": "BUY",
+        "status": "PARTIALLY_FILLED",
+        "origQty": 2.0,
+        "executedQty": 0.5,
+        "avgPrice": 210.25,
+        "orderId": "42",
+    }]
