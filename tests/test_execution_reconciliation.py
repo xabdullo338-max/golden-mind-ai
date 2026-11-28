@@ -372,7 +372,7 @@ async def test_live_execution_is_deferred_until_recovery_finishes():
     )
 
     coordinator.begin_recovery()
-    update = OrderUpdate(
+    live_partial = OrderUpdate(
         broker="IBKR",
         account_id="IBKR-01",
         client_order_id="GMAI-GATE-1",
@@ -385,12 +385,32 @@ async def test_live_execution_is_deferred_until_recovery_finishes():
         original_quantity=1.0,
     )
 
-    deferred = await coordinator.broker_update(update)
-    assert deferred.status is OrderStatus.NEW
+    # Live websocket state is deferred while recovery is authoritative.
+    deferred = await coordinator.broker_update(live_partial)
+    assert deferred.status is OrderStatus.PARTIALLY_FILLED
     assert coordinator.positions.get("IBKR-01", "AAPL") is None
+
+    # Recovery discovers the broker's final FILLED state and applies it
+    # while the gate is active. The deferred stale partial must not add 0.4.
+    recovered = OrderUpdate(
+        broker="IBKR",
+        account_id="IBKR-01",
+        client_order_id="GMAI-GATE-1",
+        status=OrderStatus.FILLED,
+        symbol="AAPL",
+        executed_quantity=1.0,
+        average_price=211.0,
+        broker_order_id="9100",
+        side="BUY",
+        original_quantity=1.0,
+    )
+    await coordinator.broker_update(recovered, allow_during_recovery=True)
 
     await coordinator.end_recovery()
 
     position = coordinator.positions.get("IBKR-01", "AAPL")
     assert position is not None
-    assert position.quantity == pytest.approx(0.4)
+    assert position.quantity == pytest.approx(1.0)
+    assert coordinator.lifecycle.get(
+        "GMAI-GATE-1", "IBKR-01", "IBKR"
+    ).status is OrderStatus.FILLED
