@@ -87,7 +87,6 @@ reconciliation_task = None
 strategy_engine = AdaptiveEnsembleStrategy()
 
 
-@asynccontextmanager
 async def _reconciliation_loop() -> None:
     while True:
         try:
