@@ -46,3 +46,25 @@ def test_lifecycle_allows_partial_to_filled():
 
     assert applied.status == OrderStatus.FILLED
     assert applied.executed_quantity == 1.0
+
+
+def test_lifecycle_rejects_stale_partial_after_filled():
+    lifecycle = OrderLifecycle()
+
+    lifecycle.apply(update(OrderStatus.PARTIALLY_FILLED, 0.6))
+    assert lifecycle.apply(update(OrderStatus.FILLED, 1.0)).status == OrderStatus.FILLED
+
+    applied = lifecycle.apply(update(OrderStatus.PARTIALLY_FILLED, 0.8))
+    assert applied.status == OrderStatus.FILLED
+    assert applied.executed_quantity == 1.0
+
+
+def test_lifecycle_rejects_stale_partial_after_canceled():
+    lifecycle = OrderLifecycle()
+
+    lifecycle.apply(update(OrderStatus.PARTIALLY_FILLED, 0.4))
+    assert lifecycle.apply(update(OrderStatus.CANCELED, 0.4)).status == OrderStatus.CANCELED
+
+    applied = lifecycle.apply(update(OrderStatus.PARTIALLY_FILLED, 0.4))
+    assert applied.status == OrderStatus.CANCELED
+    assert applied.executed_quantity == 0.4
