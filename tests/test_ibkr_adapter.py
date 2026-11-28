@@ -173,3 +173,32 @@ async def test_ibkr_order_lookup_uses_client_order_reference(monkeypatch):
     assert order is not None
     assert order["clientOrderId"] == "GMAI-9001"
     assert order["status"] == "NEW"
+
+
+@pytest.mark.asyncio
+async def test_ibkr_pending_lookup_finds_filled_order_from_account_monitor(monkeypatch):
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+
+    async def fake_request(method, path, *, json=None, params=None):
+        assert method == "GET"
+        assert path == "/v1/api/iserver/account/orders"
+        return {
+            "orders": [{
+                "orderId": 9002,
+                "ticker": "AAPL",
+                "side": "BUY",
+                "status": "Filled",
+                "totalSize": "1",
+                "filledQuantity": "1",
+                "avgPrice": "211.10",
+                "order_ref": "GMAI-9002",
+            }]
+        }
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    order = await adapter.get_order_by_client_id("AAPL", "GMAI-9002")
+
+    assert order is not None
+    assert order["status"] == "FILLED"
+    assert order["executedQty"] == 1.0
+    assert order["avgPrice"] == 211.10
