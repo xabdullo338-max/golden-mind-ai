@@ -138,7 +138,6 @@ class LiveStrategyRunner:
                 )
                 await self.router.route(account_id, order)
                 self.last_candles[symbol] = candle_timestamp
-                self.last_candles[symbol] = candle_timestamp
 
             elif decision.signal == Signal.SELL and held > 1e-12:
                 quantity = min(held, self.settings.live_max_order_notional_usdt / tick.price)
