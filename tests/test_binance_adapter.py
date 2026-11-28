@@ -28,3 +28,20 @@ async def test_live_requires_explicit_flag(monkeypatch):
                              base_url="https://api.binance.com", mode="LIVE")
     with pytest.raises(BinanceAPIError, match="Execution is disabled"):
         await adapter.place_order("BTCUSDT", "BUY", 0.001)
+
+
+@pytest.mark.asyncio
+async def test_get_open_orders_without_symbol_requests_all_orders(monkeypatch):
+    adapter = BinanceAdapter("BINANCE-TEST", "key", "secret", mode="TESTNET")
+    calls = []
+
+    async def fake_request(method, path, *, signed=False, params=None):
+        calls.append((method, path, signed, params))
+        return [{"symbol": "ADAUSDT", "status": "NEW", "clientOrderId": "other-pair-1"}]
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+
+    orders = await adapter.get_open_orders()
+
+    assert orders[0]["symbol"] == "ADAUSDT"
+    assert calls == [("GET", "/api/v3/openOrders", True, {})]
