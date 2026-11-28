@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
@@ -190,6 +190,84 @@ async def account_state(account_id: str, _: dict = Depends(require_scope("read")
     }
 
 
+
+@app.get("/market")
+async def market(symbol: str = "BTCUSDT", _: dict = Depends(require_scope("read"))):
+    managed = accounts.accounts.get(settings.binance_account_id)
+    if managed is None:
+        raise HTTPException(status_code=404, detail="Binance account is not registered")
+    tick = await managed.adapter.get_market_tick(symbol.upper())
+    if tick is None:
+        raise HTTPException(status_code=503, detail=f"Market data unavailable for {symbol.upper()}")
+    return {
+        "broker": tick.broker,
+        "symbol": tick.symbol,
+        "price": tick.price,
+        "bid": tick.bid,
+        "ask": tick.ask,
+        "spread_pct": tick.spread_pct,
+        "volume": tick.volume,
+        "timestamp": tick.timestamp.isoformat(),
+    }
+
+@app.get("/portfolio")
+async def portfolio(_: dict = Depends(require_scope("read"))):
+    state = portfolio_state.get(settings.binance_account_id)
+    if state is None:
+        raise HTTPException(status_code=503, detail="Portfolio state unavailable")
+    return {
+        "account_id": state.account_id,
+        "broker": state.broker,
+        "balances": state.balances,
+        "positions": state.positions,
+        "confirmed": state.confirmed,
+    }
+
+@app.get("/risk/snapshot")
+async def risk_snapshot(_: dict = Depends(require_scope("read"))):
+    state = portfolio_state.get(settings.binance_account_id)
+    if state is None or not state.confirmed:
+        raise HTTPException(status_code=503, detail="Reconciled portfolio state unavailable")
+    prices = market_data.price_map("BINANCE")
+    snapshot = risk_snapshot_provider.build(state, prices=prices)
+    if snapshot is None:
+        raise HTTPException(status_code=503, detail="Risk snapshot unavailable")
+    return {
+        "account_id": snapshot.account_id,
+        "equity": snapshot.equity,
+        "cash": snapshot.cash,
+        "realized_pnl": snapshot.realized_pnl,
+        "unrealized_pnl": snapshot.unrealized_pnl,
+        "daily_start_equity": snapshot.daily_start_equity,
+        "daily_loss_pct": snapshot.daily_loss_pct,
+        "open_positions": snapshot.open_positions,
+        "limits": {
+            "risk_per_trade_pct": risk_engine.max_risk_per_trade_pct,
+            "daily_loss_pct": risk_engine.max_daily_loss_pct,
+            "max_open_positions": risk_engine.max_open_positions,
+        },
+    }
+
+@app.get("/orders/history")
+async def orders_history(_: dict = Depends(require_scope("read"))):
+    lifecycle = order_router.lifecycle
+    return {"orders": [
+        {
+            "broker": item.broker,
+            "account_id": item.account_id,
+            "client_order_id": item.client_order_id,
+            "status": item.status.value,
+            "symbol": item.symbol,
+            "executed_quantity": item.executed_quantity,
+            "average_price": item.average_price,
+            "broker_order_id": item.broker_order_id,
+            "side": item.side,
+            "last_fill_quantity": item.last_fill_quantity,
+            "last_fill_price": item.last_fill_price,
+        }
+        for item in lifecycle.snapshot()
+    ] if lifecycle is not None else []}
+
 @app.get("/risk")
 async def risk(_: dict = Depends(require_scope("read"))):
     return {
@@ -217,10 +295,39 @@ async def test_order(payload: OrderIn, _: dict = Depends(require_scope("trade"))
             limit_price=payload.limit_price,
             metadata=payload.metadata,
         )
-        return await order_router.route(settings.binance_account_id, order)
+        account_id = payload.metadata.get("account_id") or settings.binance_account_id\n        return await order_router.route(str(account_id), order)
     except (ValueError, KeyError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+
+@app.websocket("/ws/events")
+async def events_socket(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    try:
+        if not token:
+            await websocket.close(code=4401)
+            return
+        from .auth import decode_access_token
+        claims = decode_access_token(token)
+        if "read" not in claims.get("scopes", []):
+            await websocket.close(code=4403)
+            return
+    except Exception:
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+    queue = event_bus.subscribe()
+    try:
+        await websocket.send_json({"event_type": "connected", "payload": {"trading_mode": settings.trading_mode.upper()}})
+        while True:
+            event = await queue.get()
+            await websocket.send_json(EventBus.serialize(event))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        event_bus.unsubscribe(queue)
 
 @app.post("/kill-switch/stop")
 async def stop(_: dict = Depends(require_scope("admin"))):
