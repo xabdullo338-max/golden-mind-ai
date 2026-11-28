@@ -342,3 +342,64 @@ async def test_unknown_order_recovers_partial_then_final_fill_without_resubmissi
     assert pending.list_account("A", "BINANCE") == []
     position = positions.get("A", "BTCUSDT")
     assert position.quantity == pytest.approx(0.01)
+
+
+@pytest.mark.asyncio
+async def test_recovery_and_websocket_fill_reconcile_without_double_count():
+    adapter = TimeoutAdapter("FILLED", executed_qty=0.01)
+    lifecycle = OrderLifecycle()
+    pending = PendingOrderStore(":memory:")
+    from app.pending_orders import PendingOrder
+    from app.order_lifecycle import OrderUpdate
+
+    pending.mark(PendingOrder("BINANCE", "A", "race-1", "BTCUSDT", "BUY", 0.01))
+    lifecycle.apply(OrderUpdate(
+        broker="BINANCE", account_id="A", client_order_id="race-1",
+        status=OrderStatus.UNKNOWN, symbol="BTCUSDT", side="BUY",
+        original_quantity=0.01,
+    ))
+
+    accounts = AccountManager()
+    accounts.register(adapter)
+    state = PortfolioStateManager()
+    state.reconcile("A", "BINANCE", {"USDT": 1000.0}, [])
+    positions = PositionEngine()
+    coordinator = ExecutionCoordinator(
+        lifecycle,
+        TradingJournal(":memory:"),
+        EventBus(),
+        positions=positions,
+        execution_ledger=ExecutionLedger(":memory:"),
+    )
+    recovery = BrokerRecovery(
+        accounts, state, TradingJournal(":memory:"),
+        lifecycle=lifecycle, pending_orders=pending,
+        execution_coordinator=coordinator,
+    )
+
+    from app.binance_execution_bridge import BinanceExecutionBridge
+    bridge = BinanceExecutionBridge("A", coordinator, state, recovery)
+
+    partial_message = {
+        "e": "executionReport",
+        "X": "PARTIALLY_FILLED",
+        "s": "BTCUSDT",
+        "c": "race-1",
+        "S": "BUY",
+        "z": "0.00400000",
+        "Z": "0.40000000",
+        "l": "0.00400000",
+        "L": "100.00000000",
+        "i": 9001,
+    }
+
+    await __import__("asyncio").gather(
+        recovery.recover_account("A"),
+        bridge.handle(partial_message),
+    )
+
+    position = positions.get("A", "BTCUSDT")
+    assert position is not None
+    assert position.quantity == pytest.approx(0.01)
+    assert lifecycle.get("race-1", "A", "BINANCE").status is OrderStatus.FILLED
+    assert pending.list_account("A", "BINANCE") == []
