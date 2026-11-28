@@ -167,7 +167,6 @@ class RiskEngine:
             now = self._clock()
             if last is not None and now - last < self.cooldown_seconds:
                 return RiskDecision(False, "order cooldown active")
-            self._last_order_at[snapshot.account_id] = now
 
         return RiskDecision(True, "risk checks passed")
 
