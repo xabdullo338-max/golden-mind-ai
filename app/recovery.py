@@ -62,7 +62,23 @@ class BrokerRecovery:
             open_orders = await adapter.get_open_orders()
 
             if self.positions is not None:
-                await self._hydrate_positions(adapter, positions)
+                positions_reconciled = await self._hydrate_positions(adapter, positions)
+                if not positions_reconciled:
+                    reason = "broker position history is incomplete; position state cannot be proven"
+                    self.portfolio_state.mark_unconfirmed(
+                        account_id, adapter.account.broker
+                    )
+                    if self.emergency is not None:
+                        await self.emergency.freeze_account(account_id, reason)
+                    self._phase[account_id] = RecoveryPhase.FAILED
+                    return RecoveryResult(
+                        account_id,
+                        balances,
+                        positions,
+                        open_orders,
+                        False,
+                        reason,
+                    )
             if self.lifecycle is not None:
                 self._hydrate_open_orders(
                     adapter.account.account_id,
@@ -132,7 +148,7 @@ class BrokerRecovery:
                 f"recovery failed: {type(exc).__name__}",
             )
 
-    async def _hydrate_positions(self, adapter, positions: list[dict[str, Any]]) -> None:
+    async def _hydrate_positions(self, adapter, positions: list[dict[str, Any]]) -> bool:
         reconstructed: dict[str, tuple[float, float, float]] = {}
         expected_symbols = {
             str(p.get("asset", "")).upper()
@@ -189,8 +205,13 @@ class BrokerRecovery:
             self.positions.clear_account(adapter.account.account_id)
             for symbol, (qty, avg, realized) in reconstructed.items():
                 self.positions.hydrate(adapter.account.account_id, symbol, qty, avg, realized)
-        elif not expected_symbols:
+            return True
+
+        if not expected_symbols:
             self.positions.clear_account(adapter.account.account_id)
+            return True
+
+        return False
 
     def _hydrate_open_orders(self, account_id: str, broker: str, open_orders: list[dict[str, Any]]) -> None:
         for order in open_orders:
