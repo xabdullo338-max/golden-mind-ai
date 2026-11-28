@@ -107,7 +107,8 @@ class LiveStrategyRunner:
                         "current_price": tick.price,
                         "stop_price": stop,
                         "take_profit_price": decision.take_profit_price,
-                        "strategy": "adaptive_ensemble_1m",\n                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
+                        "strategy": "adaptive_ensemble_1m",
+                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
@@ -124,7 +125,8 @@ class LiveStrategyRunner:
                     quantity=quantity,
                     metadata={
                         "current_price": tick.price,
-                        "strategy": "adaptive_ensemble_1m_exit",\n                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
+                        "strategy": "adaptive_ensemble_1m_exit",
+                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
