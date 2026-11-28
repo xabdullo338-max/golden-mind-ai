@@ -132,10 +132,12 @@ class LiveStrategyRunner:
                         "strategy": "adaptive_ensemble_1m",
                         "regime": decision.regime.value,
                         "model_score": decision.model_score,
+                        "ai_probability": decision.ai_probability,
                         "confidence": decision.confidence,
                     },
                 )
                 await self.router.route(account_id, order)
+                self.last_candles[symbol] = candle_timestamp
                 self.last_candles[symbol] = candle_timestamp
 
             elif decision.signal == Signal.SELL and held > 1e-12:
