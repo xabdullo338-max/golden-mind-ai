@@ -176,17 +176,23 @@ class BinanceAdapter(BrokerAdapter):
                 return [o for o in orders if str(o.get("symbol", "")).upper() == symbol.upper()]
             return orders
 
-        symbols = (symbol.upper(),) if symbol else self.reconciliation_symbols
-        if not symbols:
-            raise BinanceAPIError("At least one reconciliation symbol is required")
-
-        results: list[dict[str, Any]] = []
-        for item in symbols:
-            orders = await self._request(
-                "GET", "/api/v3/openOrders", signed=True, params={"symbol": item}
+        # Binance accepts an omitted symbol and returns all open orders.
+        # Recovery must not depend on a hard-coded symbol allow-list: an order
+        # on a newly enabled/unknown pair must still be visible before trading
+        # resumes. Keep symbol-scoped calls only when the caller explicitly asks
+        # for one symbol.
+        if symbol:
+            return await self._request(
+                "GET", "/api/v3/openOrders",
+                signed=True,
+                params={"symbol": symbol.upper()},
             )
-            results.extend(orders)
-        return results
+
+        return await self._request(
+            "GET", "/api/v3/openOrders",
+            signed=True,
+            params={},
+        )
 
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs: Any):
