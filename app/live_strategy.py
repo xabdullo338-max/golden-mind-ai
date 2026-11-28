@@ -93,15 +93,14 @@ class LiveStrategyRunner:
             if state is None or not state.confirmed:
                 continue
 
-            # Mark the candle only after all pre-trade state checks passed.
-            # Risk/order failures should not make an unprocessed candle look
-            # successfully handled.
-            self.last_candles[symbol] = candle_timestamp
-
             base = symbol.removesuffix("USDT")
             held = float(state.positions.get(base, 0.0))
             if held <= 0:
                 held = float(state.positions.get(symbol, 0.0))
+
+            if decision.signal == Signal.HOLD:
+                self.last_candles[symbol] = candle_timestamp
+                continue
 
             if decision.signal == Signal.BUY and held <= 1e-12:
                 balance = float(state.balances.get("USDT", 0.0))
@@ -137,6 +136,7 @@ class LiveStrategyRunner:
                     },
                 )
                 await self.router.route(account_id, order)
+                self.last_candles[symbol] = candle_timestamp
 
             elif decision.signal == Signal.SELL and held > 1e-12:
                 quantity = min(held, self.settings.live_max_order_notional_usdt / tick.price)
