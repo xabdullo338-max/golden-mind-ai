@@ -414,8 +414,8 @@ class AdaptiveEnsembleStrategy:
                 reason=f"regime gate: {regime.value}",
             )
 
-        risk_distance = max(indicators.atr * 1.8, current * 0.0015)
         current = candles[-1].close
+        risk_distance = max(indicators.atr * 1.8, current * 0.0015)
         if score > 0.25:
             stop = current - risk_distance
             return AdaptiveDecision(
