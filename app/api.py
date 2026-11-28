@@ -81,12 +81,30 @@ order_router = OrderRouter(
 
 runtime = None
 strategy_task = None
+reconciliation_task = None
 strategy_engine = AdaptiveEnsembleStrategy()
 
 
 @asynccontextmanager
+async def _reconciliation_loop() -> None:
+    while True:
+        try:
+            if runtime is not None:
+                result = await runtime.recovery.recover_account(runtime.account_id)
+                if not result.confirmed:
+                    # Recovery itself freezes the account when broker truth
+                    # cannot be established; keep retrying without submitting
+                    # new orders.
+                    pass
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("periodic reconciliation failed")
+        await asyncio.sleep(30)
+
+
+@asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global runtime, strategy_task
+    global runtime, strategy_task, reconciliation_task
     if settings.trading_mode.upper() in {"PAPER", "TESTNET", "LIVE"}:
         runtime = build_binance_runtime(
             settings, accounts, portfolio_state, event_bus, journal,
@@ -94,6 +112,7 @@ async def lifespan(_app: FastAPI):
             emergency=emergency, pending_orders=pending_orders,
         )
         await start_binance_runtime(runtime)
+        reconciliation_task = asyncio.create_task(_reconciliation_loop())
         if settings.live_trading_enabled and runtime.adapter.account.mode == "LIVE":
             import asyncio
             runner = LiveStrategyRunner(
@@ -111,6 +130,12 @@ async def lifespan(_app: FastAPI):
         strategy_task.cancel()
         try:
             await strategy_task
+        except asyncio.CancelledError:
+            pass
+    if reconciliation_task is not None:
+        reconciliation_task.cancel()
+        try:
+            await reconciliation_task
         except asyncio.CancelledError:
             pass
     if runtime is not None:
