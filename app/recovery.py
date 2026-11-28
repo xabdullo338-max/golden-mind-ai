@@ -52,12 +52,11 @@ class BrokerRecovery:
         managed = self.accounts.accounts.get(account_id)
         if not managed or not managed.enabled:
             self._phase[account_id] = RecoveryPhase.FAILED
-            if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
-                await self.execution_coordinator.end_recovery()
             return RecoveryResult(account_id, {}, [], [], False, "account unavailable")
 
         adapter = managed.adapter
         self._phase[account_id] = RecoveryPhase.RECONCILING
+        recovery_confirmed = False
         if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "begin_recovery"):
             self.execution_coordinator.begin_recovery()
         try:
@@ -90,8 +89,6 @@ class BrokerRecovery:
                     if self.emergency is not None:
                         await self.emergency.freeze_account(account_id, reason)
                     self._phase[account_id] = RecoveryPhase.FAILED
-                    if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
-                        await self.execution_coordinator.end_recovery()
                     return RecoveryResult(
                         account_id,
                         balances,
@@ -132,8 +129,7 @@ class BrokerRecovery:
                 executions=[],
             )
             self._phase[account_id] = RecoveryPhase.CONFIRMED
-            if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
-                await self.execution_coordinator.end_recovery()
+            recovery_confirmed = True
             return RecoveryResult(
                 account_id,
                 balances,
@@ -159,6 +155,12 @@ class BrokerRecovery:
                 False,
                 f"recovery failed: {type(exc).__name__}",
             )
+
+        finally:
+            if self.execution_coordinator is not None and hasattr(self.execution_coordinator, "end_recovery"):
+                await self.execution_coordinator.end_recovery(
+                    flush_deferred=recovery_confirmed
+                )
 
     async def _hydrate_positions(self, adapter, positions: list[dict[str, Any]]) -> bool:
         reconstructed: dict[str, tuple[float, float, float]] = {}
