@@ -409,6 +409,20 @@ async def test_recovery_and_websocket_fill_reconcile_without_double_count():
 async def test_ibkr_recovery_and_live_fill_replay_do_not_double_count():
     adapter = TimeoutAdapter("FILLED", executed_qty=1.0)
     adapter.account = BrokerAccount("IBKR-01", "IBKR", "DEMO")
+
+    # Model broker-authoritative state: the accepted order is already reflected
+    # in the broker position snapshot. Recovery must not add that fill twice.
+    async def fake_positions():
+        return [{"asset": "AAPL", "quantity": 1.0, "avgPrice": 211.0}]
+
+    async def fake_hydrate(position_engine, account_id, broker_positions):
+        position_engine.clear_account(account_id)
+        position_engine.hydrate(account_id, "AAPL", 1.0, 211.0, 0.0)
+        return True
+
+    adapter.get_positions = fake_positions
+    adapter.hydrate_positions = fake_hydrate
+
     lifecycle = OrderLifecycle()
     pending = PendingOrderStore(":memory:")
     from app.pending_orders import PendingOrder
