@@ -202,6 +202,24 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(46.dp).clip(CircleShape)
+                                .background(Amber.copy(alpha = .10f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Bolt, null, tint = Amber, modifier = Modifier.size(27.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Abdurrohman", color = Txt, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text("Pro • GM-001", color = Muted, fontSize = 10.sp)
+                        }
+                        Box(Modifier.clip(RoundedCornerShape(20.dp)).background(Green.copy(alpha = .12f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                            Text("ONLINE", color = Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
                     Text("Backend status", color = Muted, fontSize = 11.sp)
                     Spacer(Modifier.height(7.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,7 +228,7 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
                         Text(health?.status?.uppercase() ?: if (loading) "CONNECTING…" else "OFFLINE", color = Txt, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(14.dp))
-                    StatusLine("Mode", health?.tradingMode ?: "—", Amber)
+                    StatusLine("Mode", health?.tradingMode ?: "TESTNET", Amber)
                     StatusLine("Connected accounts", (health?.accounts ?: accounts.size).toString(), Green)
                 }
             }
@@ -265,7 +283,14 @@ fun TradeScreen(padding: PaddingValues, api: GoldenMindApi, accounts: List<Accou
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { Header("Savdolar", "TESTNET order console") }
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Header("Savdolar", "TESTNET order console")
+                }
+                Text("LIVE", color = Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT").forEach { pair ->
