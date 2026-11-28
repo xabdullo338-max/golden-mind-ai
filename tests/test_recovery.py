@@ -24,6 +24,21 @@ class FakeBroker(BrokerAdapter):
             raise RuntimeError("broker unavailable")
         return [{"symbol": "BTCUSDT", "status": "NEW"}]
 
+    async def get_trade_history(self, symbol, limit=1000):
+        if symbol.upper() != "BTCUSDT":
+            return []
+        return [{
+            "symbol": "BTCUSDT",
+            "side": "BUY",
+            "qty": 0.25,
+            "price": 40000.0,
+            "commission": 0.0,
+            "commissionAsset": "USDT",
+            "time": 1,
+            "id": 1,
+            "isBuyer": True,
+        }]
+
     async def place_order(self, symbol, side, quantity, order_type="MARKET", **kwargs):
         return {"status": "PAPER"}
 
