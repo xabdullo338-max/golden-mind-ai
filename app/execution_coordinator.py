@@ -34,6 +34,13 @@ class ExecutionCoordinator:
 
     async def broker_update(self, update: OrderUpdate) -> OrderUpdate:
         applied = self.lifecycle.apply(update)
+
+        # A delayed/duplicate broker event can be rejected by the lifecycle
+        # state machine. Do not re-journal or re-publish the already accepted
+        # state as a fresh execution event.
+        if applied != update:
+            return applied
+
         delta = self.execution_ledger.delta(
             applied.client_order_id,
             applied.executed_quantity,
