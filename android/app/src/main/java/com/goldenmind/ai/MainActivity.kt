@@ -22,14 +22,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.UUID
 
-private val Bg = Color(0xFF070B14)
-private val Card = Color(0xFF111827)
-private val Card2 = Color(0xFF1B2740)
+private val Bg = Color(0xFF050812)
+private val Card = Color(0xFF0D1628)
+private val Card2 = Color(0xFF16233A)
 private val Txt = Color(0xFFF8FAFC)
 private val Muted = Color(0xFFA9B4C7)
 private val Green = Color(0xFF31D49B)
 private val Red = Color(0xFFFF6B78)
-private val Amber = Color(0xFFFFC857)
+private val Amber = Color(0xFFFFC62E)
 private val Blue = Color(0xFF6E8CFF)
 private val Purple = Color(0xFF8B6CFF)
 
@@ -56,8 +56,8 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
         Surface(shape = RoundedCornerShape(28.dp), color = Card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.Bolt, null, tint = Blue, modifier = Modifier.size(48.dp))
-                Text("GOLDEN MIND AI", color = Txt, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Secure backend control center", color = Muted, fontSize = 13.sp)
+                Text("GOLDEN MIND AI", color = Amber, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
+                Text("AI Trading & Risk Control System", color = Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(20.dp))
                 OutlinedTextField(value = serverUrl, onValueChange = { serverUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Backend URL") }, placeholder = { Text("http://192.168.x.x:8000") }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Blue, unfocusedBorderColor = Color(0xFF526078), focusedLabelColor = Blue, unfocusedLabelColor = Muted, focusedTextColor = Txt, unfocusedTextColor = Txt, cursorColor = Blue))
                 Spacer(Modifier.height(10.dp))
@@ -80,7 +80,7 @@ fun LoginScreen(api: GoldenMindApi, onLoggedIn: () -> Unit) {
                         }
                     }.start()
                 }, Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp)) {
-                    Text(if (busy) "CONNECTING…" else "SIGN IN", fontWeight = FontWeight.Bold)
+                    Text(if (busy) "CONNECTING…" else "KIRISH", color = Color.Black, fontWeight = FontWeight.ExtraBold)
                 }
                 Spacer(Modifier.height(10.dp))
                 Text("Testnet / Paper • API secrets are server-side", color = Muted, fontSize = 10.sp)
@@ -143,8 +143,8 @@ fun GoldenMindApp() {
                             icon = { Icon(icon, label) },
                             label = { Text(label, fontSize = 11.sp) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Txt, selectedTextColor = Txt,
-                                indicatorColor = Blue.copy(alpha = .22f),
+                                selectedIconColor = Amber, selectedTextColor = Amber,
+                                indicatorColor = Amber.copy(alpha = .12f),
                                 unselectedIconColor = Muted, unselectedTextColor = Muted
                             )
                         )
@@ -168,9 +168,9 @@ fun GoldenMindApp() {
 @Composable
 fun Header(title: String, subtitle: String, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(title, color = Txt, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = Amber, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(4.dp))
-        Text(subtitle, color = Muted, fontSize = 13.sp)
+        Text(subtitle, color = Muted, fontSize = 12.sp)
     }
 }
 
@@ -192,7 +192,7 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Header("Golden Mind", "AI Trading Control Center")
+                Header("Golden Mind AI", "AI Trading & Risk Control System")
                 IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Txt) }
             }
         }
@@ -218,7 +218,7 @@ fun DashboardScreen(health: ApiHealth?, accounts: List<AccountInfo>, loading: Bo
         item {
             Surface(shape = RoundedCornerShape(24.dp), color = Card) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Safety state", color = Muted, fontSize = 12.sp)
+                    Text("Xavfsizlik holati", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(8.dp))
                     StatusLine("Execution mode", health?.tradingMode ?: "UNKNOWN", Amber)
                     StatusLine("Broker connections", if (accounts.isEmpty()) "None" else accounts.size.toString() + " connected", Green)
