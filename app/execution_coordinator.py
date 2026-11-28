@@ -33,6 +33,16 @@ class ExecutionCoordinator:
         ))
 
     async def broker_update(self, update: OrderUpdate) -> OrderUpdate:
+        existing = self.lifecycle.get(
+            update.client_order_id,
+            update.account_id,
+            update.broker,
+        )
+        # Exact replay of the same broker state is idempotent. Do not emit a
+        # second execution event or touch journal/position state.
+        if existing == update:
+            return existing
+
         applied = self.lifecycle.apply(update)
 
         # A delayed/duplicate broker event can be rejected by the lifecycle
