@@ -33,6 +33,11 @@ class LiveStrategyRunner:
     risk_engine: RiskEngine
     market_data: MarketDataStore
     strategy: AdaptiveEnsembleStrategy
+    last_candles: dict[str, int] | None = None
+
+    def __post_init__(self) -> None:
+        if self.last_candles is None:
+            self.last_candles = {}
 
     async def run_forever(self) -> None:
         account_id = self.settings.binance_account_id
@@ -46,24 +51,25 @@ class LiveStrategyRunner:
         if not isinstance(adapter, BinanceAdapter):
             raise RuntimeError("live strategy requires BinanceAdapter")
 
-        last_candle: int | None = None
         while True:
             try:
-                await self.step(adapter, account_id, last_candle)
-                candles = await adapter.get_candles("BTCUSDT", "1m", 45)
-                if candles:
-                    last_candle = int(candles[-1]["timestamp"])
+                await self.step(adapter, account_id)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("live strategy iteration failed")
             await asyncio.sleep(15)
 
-    async def step(self, adapter: BinanceAdapter, account_id: str, last_candle: int | None = None) -> None:
+    async def step(self, adapter: BinanceAdapter, account_id: str) -> None:
         for symbol in sorted(self.settings.symbols):
             rows = await adapter.get_candles(symbol, "1m", 60)
             if len(rows) < 45:
                 continue
+
+            candle_timestamp = int(rows[-1]["timestamp"])
+            if self.last_candles.get(symbol) == candle_timestamp:
+                continue
+            self.last_candles[symbol] = candle_timestamp
 
             candles = [Candle(**row) for row in rows]
             decision = self.strategy.evaluate(candles)
