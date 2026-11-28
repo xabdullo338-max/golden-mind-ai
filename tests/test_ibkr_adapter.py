@@ -122,3 +122,54 @@ async def test_ibkr_open_orders_are_normalized(monkeypatch):
         "avgPrice": 210.25,
         "orderId": "42",
     }]
+
+
+@pytest.mark.asyncio
+async def test_ibkr_place_order_propagates_client_order_id(monkeypatch):
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+
+    captured = {}
+
+    async def fake_request(method, path, *, json=None):
+        captured["method"] = method
+        captured["path"] = path
+        captured["json"] = json
+        return [{"order_id": "9001", "local_order_id": "GMAI-9001", "order_status": "Submitted"}]
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    result = await adapter.place_order(
+        "AAPL", "BUY", 1.0, order_type="MARKET",
+        conid=265598, client_order_id="GMAI-9001",
+    )
+
+    payload = captured["json"]["orders"][0]
+    assert payload["cOID"] == "GMAI-9001"
+    assert captured["method"] == "POST"
+    assert result[0]["local_order_id"] == "GMAI-9001"
+
+
+@pytest.mark.asyncio
+async def test_ibkr_order_lookup_uses_client_order_reference(monkeypatch):
+    adapter = IBKRAdapter("IBKR-01", mode="DEMO", session_cookie="cookie")
+
+    async def fake_request(method, path, *, json=None):
+        return {
+            "orders": [
+                {
+                    "orderId": 9001,
+                    "ticker": "AAPL",
+                    "side": "BUY",
+                    "status": "Submitted",
+                    "totalQuantity": 1,
+                    "filledQuantity": 0,
+                    "order_ref": "GMAI-9001",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    order = await adapter.get_order_by_client_id("AAPL", "GMAI-9001")
+
+    assert order is not None
+    assert order["clientOrderId"] == "GMAI-9001"
+    assert order["status"] == "NEW"
