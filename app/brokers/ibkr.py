@@ -87,6 +87,38 @@ class IBKRAdapter(BrokerAdapter):
             })
         return normalized
 
+    async def hydrate_positions(self, position_engine: Any, account_id: str,
+                                positions: list[dict[str, Any]]) -> bool:
+        """Hydrate IBKR positions from broker-reported authoritative quantities.
+
+        IBKR equity positions are not Binance-style asset/USDT spot positions, so
+        recovery must not attempt to reconstruct them through Binance trade history.
+        Negative quantities are rejected because the current PositionEngine is
+        explicitly long-only.
+        """
+        for position in positions:
+            symbol = str(position.get("symbol") or position.get("asset") or "").upper().strip()
+            try:
+                quantity = float(position.get("quantity", 0.0) or 0.0)
+                average_entry = float(
+                    position.get("avgPrice", position.get("averagePrice", 0.0)) or 0.0
+                )
+            except (TypeError, ValueError):
+                return False
+            if not symbol or quantity < 0 or (quantity > 0 and average_entry <= 0):
+                return False
+
+        position_engine.clear_account(account_id)
+        for position in positions:
+            symbol = str(position.get("symbol") or position.get("asset") or "").upper().strip()
+            quantity = float(position.get("quantity", 0.0) or 0.0)
+            average_entry = float(
+                position.get("avgPrice", position.get("averagePrice", 0.0)) or 0.0
+            )
+            if quantity > 0:
+                position_engine.hydrate(account_id, symbol, quantity, average_entry)
+        return True
+
     async def get_open_orders(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
             return []
