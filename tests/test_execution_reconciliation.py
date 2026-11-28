@@ -92,11 +92,22 @@ async def test_coordinator_duplicate_fill_does_not_change_position_twice():
     first = make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0)
     duplicate = make_update(OrderStatus.PARTIALLY_FILLED, 0.4, price=100.0)
 
+    events = coordinator.event_bus.subscribe()
+
     await coordinator.broker_update(first)
     await coordinator.broker_update(duplicate)
 
     position = coordinator.positions.get("A", "BTCUSDT")
     assert position.quantity == pytest.approx(0.4)
+
+    emitted = []
+    while not events.empty():
+        emitted.append(events.get_nowait())
+    execution_events = [
+        event for event in emitted
+        if event.event_type == "ORDER_PARTIALLY_FILLED"
+    ]
+    assert len(execution_events) == 1
 
 
 @pytest.mark.asyncio
