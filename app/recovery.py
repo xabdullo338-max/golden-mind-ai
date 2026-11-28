@@ -62,7 +62,11 @@ class BrokerRecovery:
             open_orders = await adapter.get_open_orders()
 
             if self.positions is not None:
-                positions_reconciled = await self._hydrate_positions(adapter, positions)
+                positions_reconciled = await adapter.hydrate_positions(
+                    self.positions, account_id, positions
+                )
+                if not positions_reconciled:
+                    positions_reconciled = await self._hydrate_positions(adapter, positions)
                 if not positions_reconciled:
                     reason = "broker position history is incomplete; position state cannot be proven"
                     self.portfolio_state.mark_unconfirmed(
