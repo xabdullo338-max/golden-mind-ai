@@ -98,6 +98,17 @@ class BrokerRecovery:
                         reason,
                     )
 
+            executions = await adapter.get_account_trades()
+            if executions is not None:
+                execution_check = self._validate_order_executions(open_orders, executions)
+                if not execution_check[0]:
+                    reason = execution_check[1]
+                    self.portfolio_state.mark_unconfirmed(account_id, adapter.account.broker)
+                    if self.emergency is not None:
+                        await self.emergency.freeze_account(account_id, reason)
+                    self._phase[account_id] = RecoveryPhase.FAILED
+                    return RecoveryResult(account_id, balances, positions, open_orders, False, reason)
+
             if self.positions is not None:
                 positions_reconciled = await adapter.hydrate_positions(
                     self.positions, account_id, positions
@@ -161,6 +172,47 @@ class BrokerRecovery:
                 await self.execution_coordinator.end_recovery(
                     flush_deferred=recovery_confirmed
                 )
+
+    @staticmethod
+    def _validate_order_executions(
+        orders: list[dict[str, Any]],
+        executions: list[dict[str, Any]],
+    ) -> tuple[bool, str]:
+        """Verify broker order cumulative fills against broker execution facts."""
+        totals: dict[tuple[str, str, str], float] = {}
+        for execution in executions:
+            key = (
+                str(execution.get("clientOrderId") or "").strip(),
+                str(execution.get("brokerOrderId") or "").strip(),
+                str(execution.get("symbol") or "").upper().strip(),
+            )
+            if not key[0] and not key[1]:
+                continue
+            totals[key] = totals.get(key, 0.0) + float(execution.get("quantity", 0.0) or 0.0)
+
+        for order in orders:
+            try:
+                executed = float(order.get("executedQty", order.get("executed_quantity", 0.0)) or 0.0)
+            except (TypeError, ValueError):
+                return False, "broker order contains invalid executed quantity"
+            if executed <= 0:
+                continue
+
+            client_id = str(order.get("clientOrderId") or "").strip()
+            broker_id = str(order.get("orderId", order.get("broker_order_id")) or "").strip()
+            symbol = str(order.get("symbol") or "").upper().strip()
+            observed = max(
+                totals.get((client_id, broker_id, symbol), 0.0),
+                totals.get((client_id, "", symbol), 0.0),
+                totals.get(("", broker_id, symbol), 0.0),
+            )
+            tolerance = max(1e-8, executed * 1e-6)
+            if abs(observed - executed) > tolerance:
+                return False, (
+                    f"broker execution mismatch for {client_id or broker_id or symbol}: "
+                    f"order={executed} executions={observed}"
+                )
+        return True, ""
 
     async def _hydrate_positions(self, adapter, positions: list[dict[str, Any]]) -> bool:
         reconstructed: dict[str, tuple[float, float, float]] = {}
