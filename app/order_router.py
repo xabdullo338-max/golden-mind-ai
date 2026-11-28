@@ -261,7 +261,10 @@ class OrderRouter:
             raise RuntimeError(decision.reason)
 
         try:
-            return await self.accounts.order_to(account_id, order)
+            result = await self.accounts.order_to(account_id, order)
+            if self.risk_engine is not None:
+                self.risk_engine.record_order_accepted(account_id)
+            return result
         except Exception as exc:
             self.idempotency.forget(key)
             # A timeout is not equivalent to a broker rejection: the request may
