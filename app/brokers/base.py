@@ -50,6 +50,15 @@ class BrokerAdapter(ABC):
         """Return broker truth for an order identified by client order ID."""
         return None
 
+    async def hydrate_positions(self, position_engine: Any, account_id: str,
+                                positions: list[dict[str, Any]]) -> bool:
+        """Optionally hydrate positions directly from broker-authoritative state.
+
+        Adapters that cannot reconstruct positions from trade history may override
+        this method. Returning False preserves the fail-closed recovery behavior.
+        """
+        return False
+
     @abstractmethod
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs) -> dict[str, Any]: ...
