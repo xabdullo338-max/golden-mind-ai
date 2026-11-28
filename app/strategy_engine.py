@@ -128,6 +128,7 @@ class TrendMomentumStrategy:
         return StrategyDecision(Signal.HOLD, confidence, reason="trend/momentum confirmation absent")
 
 
+
 @dataclass(frozen=True)
 class IndicatorSnapshot:
     ema_fast: float
@@ -157,21 +158,115 @@ class AdaptiveDecision(StrategyDecision):
     regime: MarketRegime = MarketRegime.UNCERTAIN
     indicators: IndicatorSnapshot | None = None
     model_score: float = 0.0
+    ai_probability: float | None = None
+
+
+class OnlineDirectionModel:
+    """Lightweight online logistic model using only past candle information."""
+
+    def __init__(self, learning_rate: float = 0.08, epochs: int = 80) -> None:
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.weights: list[float] = []
+        self.bias = 0.0
+        self.means: list[float] = []
+        self.scales: list[float] = []
+
+    @staticmethod
+    def _features(candles: list[Candle], i: int) -> list[float]:
+        closes = [c.close for c in candles]
+        volumes = [c.volume for c in candles]
+        price = closes[i]
+        ret1 = (price - closes[i - 1]) / closes[i - 1] if closes[i - 1] else 0.0
+        ret5 = (price - closes[i - 5]) / closes[i - 5] if closes[i - 5] else 0.0
+        ema9 = TrendMomentumStrategy._ema(closes[:i + 1], 9)
+        ema21 = TrendMomentumStrategy._ema(closes[:i + 1], 21)
+        atr = TrendMomentumStrategy._atr(candles[:i + 1], 14)
+        rsi = AdaptiveEnsembleStrategy._rsi(closes[:i + 1], 14)
+        start = max(0, i - 19)
+        volume_ratio = volumes[i] / max(mean(volumes[start:i + 1]), 1e-12)
+        return [
+            ret1,
+            ret5,
+            (ema9 - ema21) / max(price, 1e-12),
+            atr / max(price, 1e-12),
+            (rsi - 50.0) / 50.0,
+            volume_ratio - 1.0,
+        ]
+
+    @staticmethod
+    def _sigmoid(x: float) -> float:
+        if x >= 0:
+            z = 2.718281828459045 ** (-x)
+            return 1.0 / (1.0 + z)
+        z = 2.718281828459045 ** x
+        return z / (1.0 + z)
+
+    def fit(self, candles: list[Candle]) -> None:
+        if len(candles) < 45:
+            self.weights = []
+            return
+        x_raw: list[list[float]] = []
+        y: list[float] = []
+        for i in range(22, len(candles) - 1):
+            x_raw.append(self._features(candles, i))
+            y.append(1.0 if candles[i + 1].close > candles[i].close else 0.0)
+        if not x_raw:
+            self.weights = []
+            return
+
+        n = len(x_raw[0])
+        self.means = [mean(row[j] for row in x_raw) for j in range(n)]
+        self.scales = [
+            max(mean([(row[j] - self.means[j]) ** 2 for row in x_raw]) ** 0.5, 1e-6)
+            for j in range(n)
+        ]
+        x = [[(row[j] - self.means[j]) / self.scales[j] for j in range(n)] for row in x_raw]
+        self.weights = [0.0] * n
+        self.bias = 0.0
+
+        for _ in range(self.epochs):
+            grad_w = [0.0] * n
+            grad_b = 0.0
+            for row, target in zip(x, y):
+                probability = self._sigmoid(self.bias + sum(w * v for w, v in zip(self.weights, row)))
+                error = probability - target
+                for j, value in enumerate(row):
+                    grad_w[j] += error * value
+                grad_b += error
+            scale = 1.0 / len(x)
+            self.weights = [
+                w - self.learning_rate * grad * scale
+                for w, grad in zip(self.weights, grad_w)
+            ]
+            self.bias -= self.learning_rate * grad_b * scale
+
+    def predict_up_probability(self, candles: list[Candle]) -> float | None:
+        if not self.weights or len(candles) < 23:
+            return None
+        row = self._features(candles, len(candles) - 1)
+        normalized = [
+            (row[j] - self.means[j]) / self.scales[j]
+            for j in range(len(row))
+        ]
+        return self._sigmoid(
+            self.bias + sum(w * v for w, v in zip(self.weights, normalized))
+        )
 
 
 class AdaptiveEnsembleStrategy:
-    """Dependency-free multi-indicator regime-aware signal engine.
+    """Regime-aware ensemble combining technical indicators with a small ML layer.
 
-    It is intentionally conservative: indicators vote together, regime gates
-    the vote, and high-volatility/uncertain conditions default to HOLD.
-    This is an execution signal layer, not a profit guarantee or a trained
-    neural network.
+    The ML model is trained only on earlier candles in the supplied window.
+    The strategy remains conservative: uncertain/high-volatility regimes default
+    to HOLD and all orders still pass the independent risk engine.
     """
 
     def __init__(self, min_confidence: float = 0.62) -> None:
         if not 0.5 <= min_confidence < 1.0:
             raise ValueError("min_confidence must be in [0.5, 1.0)")
         self.min_confidence = min_confidence
+        self.ai_model = OnlineDirectionModel()
 
     @staticmethod
     def _sma(values: list[float], period: int) -> float:
@@ -199,15 +294,13 @@ class AdaptiveEnsembleStrategy:
     @staticmethod
     def _std(values: list[float]) -> float:
         m = mean(values)
-        return (mean([(v - m) ** 2 for v in values])) ** 0.5
+        return mean([(v - m) ** 2 for v in values]) ** 0.5
 
     @staticmethod
     def _adx(candles: list[Candle], period: int = 14) -> float:
         if len(candles) < period + 1:
             return 0.0
-        plus_dm = []
-        minus_dm = []
-        trs = []
+        plus_dm, minus_dm, trs = [], [], []
         for prev, cur in zip(candles[-period - 1:-1], candles[-period:]):
             up = cur.high - prev.high
             down = prev.low - cur.low
@@ -225,24 +318,28 @@ class AdaptiveEnsembleStrategy:
     def indicators(self, candles: list[Candle]) -> IndicatorSnapshot:
         closes = [float(c.close) for c in candles]
         volumes = [float(c.volume) for c in candles]
+        current = closes[-1]
         fast = TrendMomentumStrategy._ema(closes, 9)
         slow = TrendMomentumStrategy._ema(closes, 21)
         atr = TrendMomentumStrategy._atr(candles, 14)
-        current = closes[-1]
         rsi = self._rsi(closes, 14)
         mid = self._sma(closes, 20)
         std = self._std(closes[-20:])
-        upper, lower = mid + 2 * std, mid - 2 * std
         volume_ratio = volumes[-1] / max(mean(volumes[-20:]), 1e-12)
         momentum_pct = (current - closes[-6]) / closes[-6] * 100 if closes[-6] else 0.0
-        trend_strength = min(1.0, abs(fast - slow) / max(current, 1e-12) * 100 / 0.5)
         return IndicatorSnapshot(
-            ema_fast=fast, ema_slow=slow, rsi=rsi, atr=atr,
+            ema_fast=fast,
+            ema_slow=slow,
+            rsi=rsi,
+            atr=atr,
             atr_pct=atr / max(current, 1e-12) * 100,
             adx=self._adx(candles),
-            bb_mid=mid, bb_upper=upper, bb_lower=lower,
-            volume_ratio=volume_ratio, momentum_pct=momentum_pct,
-            trend_strength=trend_strength,
+            bb_mid=mid,
+            bb_upper=mid + 2 * std,
+            bb_lower=mid - 2 * std,
+            volume_ratio=volume_ratio,
+            momentum_pct=momentum_pct,
+            trend_strength=min(1.0, abs(fast - slow) / max(current, 1e-12) * 100 / 0.5),
         )
 
     @staticmethod
@@ -258,17 +355,38 @@ class AdaptiveEnsembleStrategy:
         return MarketRegime.UNCERTAIN
 
     def evaluate(self, candles: list[Candle]) -> AdaptiveDecision:
-        if len(candles) < 35:
+        if len(candles) < 45:
             return AdaptiveDecision(Signal.HOLD, 0.0, reason="not enough candles")
-        i = self.indicators(candles)
-        regime = self._regime(i)
-        current = candles[-1].close
 
-        trend_vote = 1.0 if i.ema_fast > i.ema_slow else -1.0
-        momentum_vote = 1.0 if i.momentum_pct > 0.05 else (-1.0 if i.momentum_pct < -0.05 else 0.0)
-        rsi_vote = 1.0 if 50 < i.rsi < 72 else (-1.0 if 28 < i.rsi < 50 else 0.0)
-        volume_vote = 1.0 if i.volume_ratio >= 1.15 else 0.0
-        score = 0.35 * trend_vote + 0.25 * momentum_vote + 0.15 * rsi_vote + 0.10 * volume_vote\n        if ai_probability is not None:\n            score += 0.15 * (2.0 * ai_probability - 1.0)
+        indicators = self.indicators(candles)
+        regime = self._regime(indicators)
+
+        # Train only on the past portion; the current candle is excluded from
+        # training labels to reduce look-ahead leakage.
+        self.ai_model.fit(candles[:-1])
+        ai_probability = self.ai_model.predict_up_probability(candles)
+
+        trend_vote = 1.0 if indicators.ema_fast > indicators.ema_slow else -1.0
+        momentum_vote = (
+            1.0 if indicators.momentum_pct > 0.05
+            else -1.0 if indicators.momentum_pct < -0.05
+            else 0.0
+        )
+        rsi_vote = (
+            1.0 if 50 < indicators.rsi < 72
+            else -1.0 if 28 < indicators.rsi < 50
+            else 0.0
+        )
+        volume_vote = 1.0 if indicators.volume_ratio >= 1.15 else 0.0
+
+        score = (
+            0.35 * trend_vote
+            + 0.25 * momentum_vote
+            + 0.15 * rsi_vote
+            + 0.10 * volume_vote
+        )
+        if ai_probability is not None:
+            score += 0.15 * (2.0 * ai_probability - 1.0)
 
         if regime == MarketRegime.TREND_UP:
             score += 0.10
@@ -277,27 +395,59 @@ class AdaptiveEnsembleStrategy:
         elif regime in {MarketRegime.HIGH_VOLATILITY, MarketRegime.UNCERTAIN}:
             score *= 0.45
 
-        confidence = min(0.99, 0.50 + abs(score) * 0.45 + i.trend_strength * 0.10)
-        if confidence < self.min_confidence or regime in {MarketRegime.HIGH_VOLATILITY, MarketRegime.UNCERTAIN}:
-            return AdaptiveDecision(Signal.HOLD, confidence, regime=regime, indicators=i, model_score=score, ai_probability=ai_probability,
-                                    reason=f"regime gate: {regime.value}")
+        confidence = min(
+            0.99,
+            0.50 + abs(score) * 0.45 + indicators.trend_strength * 0.10,
+        )
 
-        risk_distance = max(i.atr * 1.8, current * 0.0015)
+        if confidence < self.min_confidence or regime in {
+            MarketRegime.HIGH_VOLATILITY,
+            MarketRegime.UNCERTAIN,
+        }:
+            return AdaptiveDecision(
+                Signal.HOLD,
+                confidence,
+                regime=regime,
+                indicators=indicators,
+                model_score=score,
+                ai_probability=ai_probability,
+                reason=f"regime gate: {regime.value}",
+            )
+
+        risk_distance = max(indicators.atr * 1.8, current * 0.0015)
+        current = candles[-1].close
         if score > 0.25:
             stop = current - risk_distance
             return AdaptiveDecision(
-                Signal.BUY, confidence, stop_price=stop,
+                Signal.BUY,
+                confidence,
+                stop_price=stop,
                 take_profit_price=current + risk_distance * 2.2,
-                regime=regime, indicators=i, model_score=score,
-                reason=f"ensemble BUY: trend+momentum+RSI+volume; regime={regime.value}",
+                regime=regime,
+                indicators=indicators,
+                model_score=score,
+                ai_probability=ai_probability,
+                reason=f"ensemble BUY: trend+momentum+RSI+volume+ML; regime={regime.value}",
             )
         if score < -0.25:
             stop = current + risk_distance
             return AdaptiveDecision(
-                Signal.SELL, confidence, stop_price=stop,
+                Signal.SELL,
+                confidence,
+                stop_price=stop,
                 take_profit_price=current - risk_distance * 2.2,
-                regime=regime, indicators=i, model_score=score,
-                reason=f"ensemble SELL: trend+momentum+RSI+volume; regime={regime.value}",
+                regime=regime,
+                indicators=indicators,
+                model_score=score,
+                ai_probability=ai_probability,
+                reason=f"ensemble SELL: trend+momentum+RSI+volume+ML; regime={regime.value}",
             )
-        return AdaptiveDecision(Signal.HOLD, confidence, regime=regime, indicators=i, model_score=score,
-                                ai_probability=ai_probability, reason="ensemble score below entry threshold")
+        return AdaptiveDecision(
+            Signal.HOLD,
+            confidence,
+            regime=regime,
+            indicators=indicators,
+            model_score=score,
+            ai_probability=ai_probability,
+            reason="ensemble score below entry threshold",
+        )
