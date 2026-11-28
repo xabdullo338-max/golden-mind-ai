@@ -295,7 +295,8 @@ async def test_order(payload: OrderIn, _: dict = Depends(require_scope("trade"))
             limit_price=payload.limit_price,
             metadata=payload.metadata,
         )
-        account_id = payload.metadata.get("account_id") or settings.binance_account_id\n        return await order_router.route(str(account_id), order)
+        account_id = payload.metadata.get("account_id") or settings.binance_account_id
+        return await order_router.route(str(account_id), order)
     except (ValueError, KeyError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
