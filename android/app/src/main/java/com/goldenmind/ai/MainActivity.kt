@@ -173,7 +173,6 @@ fun GoldenMindApp() {
     }
 }
 
-}
 
 @Composable
 fun Header(title: String, subtitle: String, modifier: Modifier = Modifier) {
