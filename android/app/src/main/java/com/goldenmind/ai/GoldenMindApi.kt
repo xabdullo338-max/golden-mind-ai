@@ -47,10 +47,10 @@ class SecureTokenStore(context: Context) {
     }
 
     fun save(token: String) {
-        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key(), GCMParameterSpec(128, iv))
+        cipher.init(Cipher.ENCRYPT_MODE, key())
         val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
+        val iv = cipher.iv
         prefs.edit()
             .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
             .putString("token", Base64.encodeToString(encrypted, Base64.NO_WRAP))
