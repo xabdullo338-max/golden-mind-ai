@@ -62,7 +62,7 @@ class LiveStrategyRunner:
     async def step(self, adapter: BinanceAdapter, account_id: str, last_candle: int | None = None) -> None:
         for symbol in sorted(self.settings.symbols):
             rows = await adapter.get_candles(symbol, "1m", 60)
-            if len(rows) < 25:
+            if len(rows) < 45:
                 continue
 
             candles = [Candle(**row) for row in rows]
@@ -108,7 +108,8 @@ class LiveStrategyRunner:
                         "stop_price": stop,
                         "take_profit_price": decision.take_profit_price,
                         "strategy": "adaptive_ensemble_1m",
-                        "regime": decision.regime.value,\n                        "model_score": decision.model_score,
+                        "regime": decision.regime.value,
+                        "model_score": decision.model_score,
                         "confidence": decision.confidence,
                     },
                 )
