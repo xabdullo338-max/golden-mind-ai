@@ -78,6 +78,23 @@ class OrderLifecycle:
             # after a newer state. Never let an older lifecycle state regress.
             if incoming_rank < current_rank:
                 return current
+
+            # PARTIALLY_FILLED has the same lifecycle rank, but execution
+            # quantity is also monotonic. A delayed broker event must never
+            # erase fills already observed by the runtime.
+            if (
+                current.status == OrderStatus.PARTIALLY_FILLED
+                and update.status == OrderStatus.PARTIALLY_FILLED
+            ):
+                if update.executed_quantity < current.executed_quantity - 1e-10:
+                    return current
+                if (
+                    abs(update.executed_quantity - current.executed_quantity) <= 1e-10
+                    and current.last_fill_quantity is not None
+                    and update.last_fill_quantity is None
+                ):
+                    return current
+
         self._orders[key] = update
         return update
 
