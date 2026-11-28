@@ -19,9 +19,10 @@ from app.recovery import BrokerRecovery
 
 
 class TimeoutAdapter(BrokerAdapter):
-    def __init__(self, outcome="FILLED"):
+    def __init__(self, outcome="FILLED", executed_qty=None):
         self.account = BrokerAccount("A", "BINANCE", "TESTNET")
         self.outcome = outcome
+        self.executed_qty = executed_qty
         self.place_calls = 0
 
     async def get_balance(self):
@@ -41,7 +42,7 @@ class TimeoutAdapter(BrokerAdapter):
             "symbol": symbol,
             "side": "BUY",
             "origQty": "0.01",
-            "executedQty": "0.01" if self.outcome == "FILLED" else "0",
+            "executedQty": str(self.executed_qty if self.executed_qty is not None else (0.01 if self.outcome == "FILLED" else 0)),
             "avgPrice": "100",
             "orderId": "9001",
             "clientOrderId": client_order_id,
@@ -294,7 +295,7 @@ async def test_frozen_account_blocks_new_order_after_unresolved_recovery():
 
 @pytest.mark.asyncio
 async def test_unknown_order_recovers_partial_then_final_fill_without_resubmission():
-    adapter = TimeoutAdapter("PARTIALLY_FILLED")
+    adapter = TimeoutAdapter("PARTIALLY_FILLED", executed_qty=0.004)
     lifecycle = OrderLifecycle()
     pending = PendingOrderStore(":memory:")
     from app.pending_orders import PendingOrder
@@ -328,10 +329,11 @@ async def test_unknown_order_recovers_partial_then_final_fill_without_resubmissi
     first = await recovery.recover_account("A")
     assert first.confirmed is False
     assert lifecycle.get("partial-1", "A", "BINANCE").status is OrderStatus.PARTIALLY_FILLED
-    assert lifecycle.get("partial-1", "A", "BINANCE").executed_quantity == pytest.approx(0.0)
+    assert lifecycle.get("partial-1", "A", "BINANCE").executed_quantity == pytest.approx(0.004)
     assert pending.list_account("A", "BINANCE") != []
 
     adapter.outcome = "FILLED"
+    adapter.executed_qty = 0.01
     second = await recovery.recover_account("A")
     assert second.confirmed is True
     recovered = lifecycle.get("partial-1", "A", "BINANCE")
