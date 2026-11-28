@@ -388,7 +388,9 @@ async def test_live_execution_is_deferred_until_recovery_finishes():
     # Live websocket state is deferred while recovery is authoritative.
     deferred = await coordinator.broker_update(live_partial)
     assert deferred.status is OrderStatus.PARTIALLY_FILLED
-    assert coordinator.positions.get("IBKR-01", "AAPL") is None
+    deferred_position = coordinator.positions.get("IBKR-01", "AAPL")
+    assert deferred_position is not None
+    assert deferred_position.quantity == pytest.approx(0.0)
 
     # Recovery discovers the broker's final FILLED state and applies it
     # while the gate is active. The deferred stale partial must not add 0.4.
