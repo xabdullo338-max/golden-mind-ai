@@ -16,10 +16,23 @@ class ExecutionCoordinator:
     event_bus: EventBus
     positions: PositionEngine | None = None
     execution_ledger: ExecutionLedger | None = None
+    _recovery_active: bool = False
+    _deferred_updates: list[OrderUpdate] | None = None
 
     def __post_init__(self):
         if self.execution_ledger is None:
             self.execution_ledger = ExecutionLedger()
+        self._deferred_updates = []
+
+    def begin_recovery(self) -> None:
+        self._recovery_active = True
+
+    async def end_recovery(self) -> None:
+        self._recovery_active = False
+        deferred = list(self._deferred_updates or [])
+        self._deferred_updates = []
+        for update in deferred:
+            await self.broker_update(update)
 
     async def submitted(self, account_id: str, broker: str, client_order_id: str,
                         symbol: str, side: str, quantity: float) -> None:
@@ -32,7 +45,11 @@ class ExecutionCoordinator:
             client_order_id=client_order_id, symbol=symbol, side=side, quantity=quantity,
         ))
 
-    async def broker_update(self, update: OrderUpdate) -> OrderUpdate:
+    async def broker_update(self, update: OrderUpdate, *, allow_during_recovery: bool = False) -> OrderUpdate:
+        if self._recovery_active and not allow_during_recovery:
+            self._deferred_updates.append(update)
+            existing = self.lifecycle.get(update.client_order_id, update.account_id, update.broker)
+            return existing or update
         existing = self.lifecycle.get(
             update.client_order_id,
             update.account_id,
