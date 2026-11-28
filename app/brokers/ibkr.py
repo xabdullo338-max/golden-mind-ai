@@ -119,10 +119,72 @@ class IBKRAdapter(BrokerAdapter):
                 position_engine.hydrate(account_id, symbol, quantity, average_entry)
         return True
 
+    @staticmethod
+    def _normalize_order(item: dict[str, Any]) -> dict[str, Any] | None:
+        if not isinstance(item, dict):
+            return None
+        symbol = str(item.get("symbol") or item.get("ticker") or "").upper().strip()
+        side = str(item.get("side") or item.get("action") or "").upper().strip()
+        status = str(item.get("status") or "").upper().strip()
+        client_order_id = str(
+            item.get("clientOrderId")
+            or item.get("client_order_id")
+            or item.get("orderRef")
+            or item.get("order_ref")
+            or ""
+        ).strip()
+        broker_order_id = item.get("orderId", item.get("order_id"))
+        if not symbol or side not in {"BUY", "SELL"} or not client_order_id:
+            return None
+        try:
+            original = float(
+                item.get("quantity", item.get("origQty", item.get("totalQuantity", 0.0))) or 0.0
+            )
+            executed = float(
+                item.get("executedQty", item.get("filledQuantity", item.get("cumQty", 0.0))) or 0.0
+            )
+        except (TypeError, ValueError):
+            return None
+        if original <= 0 or executed < 0 or executed > original + 1e-10:
+            return None
+        price_value = item.get("avgPrice", item.get("averagePrice", item.get("price")))
+        try:
+            avg_price = float(price_value) if price_value not in (None, "", 0, "0") else None
+        except (TypeError, ValueError):
+            avg_price = None
+        return {
+            "clientOrderId": client_order_id,
+            "symbol": symbol,
+            "side": side,
+            "status": status or "NEW",
+            "origQty": original,
+            "executedQty": executed,
+            "avgPrice": avg_price,
+            "orderId": str(broker_order_id) if broker_order_id is not None else None,
+        }
+
     async def get_open_orders(self) -> list[dict[str, Any]]:
         if self.account.mode == "PAPER":
             return []
-        return await self._request("GET", "/v1/api/iserver/account/orders")
+        raw = await self._request("GET", "/v1/api/iserver/account/orders")
+        items = raw.get("orders", []) if isinstance(raw, dict) else raw
+        normalized: list[dict[str, Any]] = []
+        for item in items if isinstance(items, list) else []:
+            order = self._normalize_order(item)
+            if order is not None:
+                normalized.append(order)
+        return normalized
+
+    async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> dict[str, Any] | None:
+        if self.account.mode == "PAPER":
+            return None
+        for order in await self.get_open_orders():
+            if (
+                order.get("clientOrderId") == client_order_id
+                and str(order.get("symbol", "")).upper() == symbol.upper()
+            ):
+                return order
+        return None
 
     async def place_order(self, symbol: str, side: str, quantity: float,
                           order_type: str = "MARKET", **kwargs: Any):
